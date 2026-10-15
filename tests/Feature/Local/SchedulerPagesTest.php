@@ -266,4 +266,37 @@ class SchedulerPagesTest extends TestCase
         $this->expectException(\Illuminate\Contracts\Cache\LockTimeoutException::class);
         (new \App\Sync\SyncRunner)->run($c, ['2026-10-14'], false, null, ['sales']);
     }
+
+    public function test_scheduled_run_marks_days_done_and_uploads_them(): void
+    {
+        \Carbon\CarbonImmutable::setTestNow(\Carbon\CarbonImmutable::parse('2026-10-09 12:00:00', 'Asia/Makassar'));
+        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-10-09 12:00:00', 'Asia/Makassar'));
+        config(['runner.catchup_days' => 0]);
+        \App\Models\LocalSetting::create(['hosted_api_url' => 'https://host.example', 'runner_token' => str_repeat('s', 64)]);
+        // Registered before FakeQuinos, whose catch-all would otherwise answer the hosted calls too.
+        \Illuminate\Support\Facades\Http::fake([
+            '*/api/runner/v1/tenants' => \Illuminate\Support\Facades\Http::response(['tenants' => [[
+                'id' => 5, 'name' => 'Zali', 'quinos_email' => 'zali@example.com', 'quinos_password' => 'secret-quinos-password',
+                'quinos_company_id' => null, 'timezone' => 'Asia/Makassar', 'shift_assign_by' => 'open_time', 'shifts' => [],
+            ]]]),
+            '*/api/runner/v1/imports*' => \Illuminate\Support\Facades\Http::response(['counts' => []]),
+        ]);
+        $quinos = \Tests\Support\FakeQuinos::install();
+        $quinos->lists['/departments'] = [['id' => 1415, 'name' => 'FOOD', 'categories' => []]];
+        $quinos->lists['/items'] = [];
+        $quinos->lists['/contacts'] = [];
+        $quinos->lists['/purchaseOrders'] = [\Tests\Support\QuinosDocs::order(3, '2026-10-08')];
+        $quinos->details['/purchaseOrders/3'] = \Tests\Support\QuinosDocs::orderDetail(\Tests\Support\QuinosDocs::order(3, '2026-10-08'));
+        $quinos->lists['/goodsReceipts'] = [];
+        $quinos->lists['/purchaseInvoices'] = [];
+
+        $run = app(LocalSyncService::class)->run(null, false, null, true, 'scheduled');
+
+        $purchase = $run->items()->where('package', 'purchase')->first();
+        $this->assertSame('success', $purchase->status, (string) $purchase->error);
+        $this->assertSame(['2026-10-08', '2026-10-09'], $purchase->dates);
+        $this->assertSame(2, SyncDay::where('client_id', 5)->where('package', 'purchase')->where('status', 'done')->count());
+        \Carbon\CarbonImmutable::setTestNow();
+        \Carbon\Carbon::setTestNow();
+    }
 }

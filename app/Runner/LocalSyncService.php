@@ -19,7 +19,8 @@ class LocalSyncService {
  }
  /** Create or refresh the local copy of a hosted tenant. The local `scheduled` choice is never overwritten. */
  public function upsertClient(array $cfg): Client {
-  $client=Client::updateOrCreate(['id'=>(int)$cfg['id']],['name'=>$cfg['name'],'quinos_email'=>$cfg['quinos_email'],'quinos_password'=>$cfg['quinos_password'],'quinos_company_id'=>$cfg['quinos_company_id']??null,'timezone'=>$cfg['timezone'],'shift_assign_by'=>$cfg['shift_assign_by'],'active'=>true]);
+  /* `id` is not mass-assignable, so updateOrCreate(['id'=>..]) would ignore it and number clients locally; the id must stay the hosted one. */
+  $client=Client::find((int)$cfg['id']) ?? (new Client)->forceFill(['id'=>(int)$cfg['id']]); $client->fill(['name'=>$cfg['name'],'quinos_email'=>$cfg['quinos_email'],'quinos_password'=>$cfg['quinos_password'],'quinos_company_id'=>$cfg['quinos_company_id']??null,'timezone'=>$cfg['timezone'],'shift_assign_by'=>$cfg['shift_assign_by'],'active'=>true])->save();
   $client->shifts()->delete(); foreach($cfg['shifts']??[] as $s)$client->shifts()->create($s);
   return $client;
  }
@@ -29,7 +30,7 @@ class LocalSyncService {
   $client=$this->upsertClient($cfg);
   if($scheduledOnly && $client->scheduled===false) return;
   $today=CarbonImmutable::now($client->timezone);
-  $packages=$masterOnly?['master']:($reportsOnly?['purchase','sales']:['master','purchase','sales']); foreach($packages as $package){$dates=$package==='master'?[]:$this->reportDates($client,$package,$today); $item=LocalSyncRunItem::create(['local_sync_run_id'=>$run->id,'tenant_id'=>$client->id,'tenant_name'=>$client->name,'package'=>$package,'dates'=>$dates,'status'=>'running','started_at'=>now()]); try{$runner=new SyncRunner; if($package==='master')$runner->run($client,[],true); else $runner->run($client,$dates,true,null,[$package]); $this->assertDone($client,$package,$dates); $count=$this->push($client,$package,$dates); $item->update(['status'=>'success','rows'=>$count,'finished_at'=>now()]);}catch(Throwable $e){$item->update(['status'=>'failed','error'=>$this->safe($e),'finished_at'=>now()]);}}
+  $packages=$masterOnly?['master']:($reportsOnly?['purchase','sales']:['master','purchase','sales']); foreach($packages as $package){$dates=$package==='master'?[]:$this->reportDates($client,$package,$today); $item=LocalSyncRunItem::create(['local_sync_run_id'=>$run->id,'tenant_id'=>$client->id,'tenant_name'=>$client->name,'package'=>$package,'dates'=>$dates,'status'=>'running','started_at'=>now()]); try{$runner=new SyncRunner; if($package!=='master')$this->queueDays($client,$package,$dates); if($package==='master')$runner->run($client,[],true); else $runner->run($client,$dates,true,null,[$package]); $this->assertDone($client,$package,$dates); $count=$this->push($client,$package,$dates); $item->update(['status'=>'success','rows'=>$count,'finished_at'=>now()]);}catch(Throwable $e){$item->update(['status'=>'failed','error'=>$this->safe($e),'finished_at'=>now()]);}}
  }
  /** Yesterday and today, plus any earlier day in the catch-up window that is not fully synced yet (PC was off, a run failed, or the day was synced before it ended). */
  private function reportDates(Client $c,string $package,CarbonImmutable $today):array {
@@ -40,6 +41,8 @@ class LocalSyncService {
   }
   sort($dates); return array_values(array_unique($dates));
  }
+ /** The runner only updates day records that exist (the Sync page creates them as pending first), so do the same here. */
+ private function queueDays(Client $c,string $package,array $dates):void { foreach($dates as $d)\App\Models\SyncDay::updateOrCreate(['client_id'=>$c->id,'package'=>$package,'date'=>$d],['status'=>\App\Models\SyncDay::PENDING,'error'=>null]); }
  /** A run whose process died (window closed, PC switched off) never finishes its rows; stop showing them as running. */
  private function closeAbandoned():void {
   $old=now()->subHours(3);
