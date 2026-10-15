@@ -24,7 +24,9 @@ if not exist public\build\manifest.json (
     if errorlevel 1 goto fail
 )
 if exist public\build xcopy /E /I /Y public\build build >nul
-start "" http://localhost/local_sync/
+rem The URL uses this folder's name, so htdocs\quinos_sync opens localhost/quinos_sync/.
+for %%I in ("%~dp0.") do set "APPFOLDER=%%~nxI"
+start "" http://localhost/%APPFOLDER%/
 echo XAMPP should be running Apache and MySQL.
 exit /b 0
 :fail

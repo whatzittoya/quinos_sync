@@ -23,11 +23,13 @@ The sidebar has three pages:
 
 ## XAMPP
 
-Copy the folder into `xampp/htdocs/local_sync`. Start Apache and MySQL in XAMPP, then open:
+Copy the folder into `xampp/htdocs/` (for example `xampp/htdocs/quinos_sync`). Start Apache and MySQL in XAMPP, run `xampp-start.cmd` once (it prepares the app and opens the page), then open `http://localhost/<folder name>/`, for example:
 
 ```text
-http://localhost/local_sync/
+http://localhost/quinos_sync/
 ```
+
+`start.cmd` is for running without XAMPP: it starts PHP's own server on port 8010. You don't need it with XAMPP.
 
 The included root `index.php` and `.htaccess` let Apache serve the app when the project folder itself is the web directory. `start.cmd` copies `public/build` into the root `build` folder for this layout. Make sure Apache's `mod_rewrite` is enabled and `AllowOverride All` is allowed for `htdocs`.
 
