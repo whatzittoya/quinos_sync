@@ -2,6 +2,10 @@
 // Prepare a fresh copied application without needing database access.
 @unlink(__DIR__.'/public/hot');
 require __DIR__.'/vendor/autoload.php';
+// Git does not keep empty folders, so a fresh clone lacks the runtime folders Laravel writes to.
+foreach (['storage/logs', 'storage/framework/cache/data', 'storage/framework/sessions', 'storage/framework/views', 'bootstrap/cache'] as $dir) {
+    if (!is_dir(__DIR__.'/'.$dir) && !@mkdir(__DIR__.'/'.$dir, 0775, true) && !is_dir(__DIR__.'/'.$dir)) { fwrite(STDERR, "Cannot create $dir.\n"); exit(1); }
+}
 $path = __DIR__.'/.env';
 if (!is_file($path) && !copy(__DIR__.'/.env.example', $path)) { fwrite(STDERR, "Cannot create .env.\n"); exit(1); }
 $values = Dotenv\Dotenv::parse(file_get_contents($path));
