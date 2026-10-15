@@ -11,7 +11,7 @@ const error = ref('');
 
 const KINDS = {
     master: { title: 'Master data', collects: 'Departments, categories, items, sales types and contacts.' },
-    reports: { title: 'Reports', collects: 'Purchase orders, goods receipts, purchase invoices and sales transactions for yesterday and today (in each client’s timezone).' },
+    reports: { title: 'Reports', collects: 'Purchase orders, goods receipts, purchase invoices and sales transactions for yesterday and today (in each client’s timezone), plus any recent day still missing.' },
 };
 
 async function load() {

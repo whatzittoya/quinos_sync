@@ -197,4 +197,33 @@ class SchedulerPagesTest extends TestCase
         $this->getJson('/api/sync/calendar?month=2026-10', ['X-Client-Id' => $a->id])->assertJsonPath('progress', 'Reading /items, page 4');
         $this->getJson('/api/sync/calendar?month=2026-10', ['X-Client-Id' => $b->id])->assertJsonPath('progress', null);
     }
+
+    public function test_scheduled_run_catches_up_on_days_that_are_missing_or_were_partial(): void
+    {
+        \Carbon\CarbonImmutable::setTestNow(\Carbon\CarbonImmutable::parse('2026-10-15 10:00:00', 'Asia/Makassar'));
+        \Carbon\Carbon::setTestNow(\Carbon\Carbon::parse('2026-10-15 10:00:00', 'Asia/Makassar'));
+        config(['runner.catchup_days' => 7]);
+        $c = $this->client('Zali');
+        $day = fn ($date, $package, $status, $partial = false) => SyncDay::create(['client_id' => $c->id, 'package' => $package, 'date' => $date, 'status' => $status, 'partial' => $partial]);
+        $day('2026-10-13', 'sales', 'done');
+        $day('2026-10-12', 'sales', 'done', true); // synced before the day ended
+        $day('2026-10-11', 'sales', 'failed');
+        $day('2026-10-10', 'sales', 'done');
+        $day('2026-10-09', 'sales', 'done');
+        $day('2026-10-08', 'sales', 'done');
+        $day('2026-10-14', 'sales', 'done'); // yesterday is always included anyway
+
+        $method = new \ReflectionMethod(LocalSyncService::class, 'reportDates');
+        $method->setAccessible(true);
+        $service = new LocalSyncService(\Mockery::mock(RunnerApi::class));
+        $today = \Carbon\CarbonImmutable::now('Asia/Makassar');
+
+        $this->assertSame(['2026-10-11', '2026-10-12', '2026-10-14', '2026-10-15'], $method->invoke($service, $c, 'sales', $today));
+        $this->assertSame(['2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15'], $method->invoke($service, $c, 'purchase', $today));
+
+        config(['runner.catchup_days' => 0]);
+        $this->assertSame(['2026-10-14', '2026-10-15'], $method->invoke($service, $c, 'purchase', $today));
+        \Carbon\CarbonImmutable::setTestNow();
+        \Carbon\Carbon::setTestNow();
+    }
 }

@@ -35,4 +35,6 @@ The included root `index.php` and `.htaccess` let Apache serve the app when the 
 
 For XAMPP, use `xampp-start.cmd` after starting Apache and MySQL in the XAMPP Control Panel. It opens `http://localhost/local_sync/`; it does not start Laravel's built-in server.
 
+Each reports run covers yesterday and today, plus any of the previous days (7 by default, `RUNNER_CATCHUP_DAYS` in `.env`, 0 turns it off) that are not fully synced, so a PC that was off catches up.
+
 Scheduling is separate and only runs for the clients checked under **Scheduler**: the **Master data** task runs `local:sync --scheduled --master-only`, while the **Reports** task runs `local:sync --scheduled --reports-only`. Configure their times independently from the dashboard.
