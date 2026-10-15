@@ -299,4 +299,14 @@ class SchedulerPagesTest extends TestCase
         \Carbon\CarbonImmutable::setTestNow();
         \Carbon\Carbon::setTestNow();
     }
+
+    public function test_pull_status_survives_hosted_being_unreachable(): void
+    {
+        $this->client('Zali');
+        \App\Models\LocalSetting::create(['hosted_api_url' => 'https://host.example', 'runner_token' => str_repeat('s', 64)]);
+        \Illuminate\Support\Facades\Http::fake(fn () => throw new \Illuminate\Http\Client\ConnectionException('cURL error 28: Timeout was reached'));
+
+        $this->postJson('/api/sync/pull-status')->assertOk()->assertJsonPath('pulled', 0)
+            ->assertJsonPath('error', 'Could not reach the hosted app. Check this PC\'s internet connection.');
+    }
 }
