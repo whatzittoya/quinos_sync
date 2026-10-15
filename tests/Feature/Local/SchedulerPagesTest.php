@@ -226,4 +226,44 @@ class SchedulerPagesTest extends TestCase
         \Carbon\CarbonImmutable::setTestNow();
         \Carbon\Carbon::setTestNow();
     }
+
+    public function test_a_failed_package_reports_the_real_reason(): void
+    {
+        $c = $this->client('Alpha');
+        SyncDay::create(['client_id' => $c->id, 'package' => 'purchase', 'date' => '2026-10-14', 'status' => 'failed', 'error' => 'Quinos rejected the login']);
+        $method = new \ReflectionMethod(LocalSyncService::class, 'assertDone');
+        $method->setAccessible(true);
+
+        $this->expectExceptionMessage('Purchase sync did not complete for 2026-10-14: Quinos rejected the login');
+        $method->invoke(new LocalSyncService(\Mockery::mock(RunnerApi::class)), $c, 'purchase', ['2026-10-14']);
+    }
+
+    public function test_rows_of_a_dead_run_stop_showing_as_running(): void
+    {
+        $old = LocalSyncRun::create(['run_uuid' => (string) \Illuminate\Support\Str::uuid(), 'status' => 'running', 'started_at' => now()->subHours(5)]);
+        $fresh = LocalSyncRun::create(['run_uuid' => (string) \Illuminate\Support\Str::uuid(), 'status' => 'running', 'started_at' => now()->subMinutes(10)]);
+        $item = fn ($run) => LocalSyncRunItem::create(['local_sync_run_id' => $run->id, 'tenant_id' => 1, 'tenant_name' => 'A', 'package' => 'master', 'dates' => [], 'status' => 'running', 'started_at' => $run->started_at]);
+        $oldItem = $item($old);
+        $freshItem = $item($fresh);
+        $api = \Mockery::mock(RunnerApi::class);
+        $api->shouldReceive('tenants')->andReturn([]);
+
+        (new LocalSyncService($api))->run();
+
+        $this->assertSame('failed', $oldItem->fresh()->status);
+        $this->assertStringContainsString('Interrupted', $oldItem->fresh()->error);
+        $this->assertSame('failed', $old->fresh()->status);
+        $this->assertSame('running', $freshItem->fresh()->status, 'a run that is still young is left alone');
+    }
+
+    public function test_two_syncs_of_one_client_do_not_run_at_once(): void
+    {
+        config(['sync.lock_wait' => 1]);
+        $c = $this->client('Alpha');
+        $lock = \Illuminate\Support\Facades\Cache::lock('quinos-sync-client:'.$c->id, 60);
+        $this->assertTrue($lock->get());
+
+        $this->expectException(\Illuminate\Contracts\Cache\LockTimeoutException::class);
+        (new \App\Sync\SyncRunner)->run($c, ['2026-10-14'], false, null, ['sales']);
+    }
 }

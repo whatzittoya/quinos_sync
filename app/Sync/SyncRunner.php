@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\SyncDay;
 use App\Services\Quinos\QuinosClient;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Cache;
 use Throwable;
 
 /**
@@ -21,6 +22,16 @@ class SyncRunner
      * @param  list<string>|null  $packages  which data packages (reports) to sync; null = all
      */
     public function run(Client $client, array $dates, bool $force = false, ?array $masterKinds = null, ?array $packages = null): void
+    {
+        // A client's Quinos login session is shared, so two syncs of it at once (for example the Master and
+        // Reports tasks, or a task and the Sync page) disturb each other. Wait for the running one to finish.
+        Cache::lock('quinos-sync-client:'.$client->id, 3900)->block(
+            (int) config('sync.lock_wait', 3600),
+            fn () => $this->runLocked($client, $dates, $force, $masterKinds, $packages),
+        );
+    }
+
+    private function runLocked(Client $client, array $dates, bool $force, ?array $masterKinds, ?array $packages): void
     {
         $quinos = QuinosClient::for($client);
         $packages = $packages === null

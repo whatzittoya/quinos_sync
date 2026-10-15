@@ -23,6 +23,9 @@ return [
     // Needs php-fpm or LiteSpeed; elsewhere (and in the console) syncs are queued as before.
     'run_after_response' => (bool) env('SYNC_AFTER_RESPONSE', true),
 
+    // Seconds a sync waits for another sync of the same client to finish before giving up.
+    'lock_wait' => (int) env('SYNC_LOCK_WAIT', 3600),
+
     // Most days one request may queue.
     'max_days_per_request' => 62,
 
