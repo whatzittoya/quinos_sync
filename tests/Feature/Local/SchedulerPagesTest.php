@@ -187,4 +187,14 @@ class SchedulerPagesTest extends TestCase
         $this->assertStringEndsWith('/chunks/0', $chunk->url());
         $this->assertSame(['sales_transactions' => []], $chunk['tables']);
     }
+
+    public function test_calendar_shows_what_a_running_sync_is_doing(): void
+    {
+        $a = $this->client('Alpha');
+        $b = $this->client('Beta');
+        \App\Sync\SyncProgress::set($a->id, 'Reading /items, page 4');
+
+        $this->getJson('/api/sync/calendar?month=2026-10', ['X-Client-Id' => $a->id])->assertJsonPath('progress', 'Reading /items, page 4');
+        $this->getJson('/api/sync/calendar?month=2026-10', ['X-Client-Id' => $b->id])->assertJsonPath('progress', null);
+    }
 }

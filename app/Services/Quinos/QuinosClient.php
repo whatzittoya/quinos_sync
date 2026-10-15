@@ -6,6 +6,7 @@ use App\Exceptions\Quinos\QuinosAuthException;
 use App\Exceptions\Quinos\QuinosRequestException;
 use App\Models\Client;
 use App\Models\QuinosSession;
+use App\Sync\SyncProgress;
 use Generator;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
@@ -68,6 +69,8 @@ class QuinosClient
 
         for ($i = 0; $i < config('quinos.max_pages'); $i++) {
             $page = $this->get($path, $cursor === null ? $query : ['cursor' => $cursor] + $query);
+
+            SyncProgress::set($this->client->id, 'Reading '.$path.', page '.($i + 1));
 
             yield $page;
 

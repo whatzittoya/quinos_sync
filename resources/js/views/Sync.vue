@@ -413,7 +413,7 @@ onBeforeUnmount(() => { clearTimeout(timer); masterBusy.value = false; clearTime
             <p v-if="notice" class="rounded-md bg-sky-50 px-3 py-2 text-sm text-sky-800">{{ notice }}</p>
 
             <div v-if="waitingCount" class="flex flex-wrap items-center gap-3 rounded-md border border-sky-200 bg-white px-3 py-2 text-sm">
-                <span class="text-slate-700">{{ waitingCount }} day{{ waitingCount > 1 ? 's' : '' }} waiting or syncing in this month.</span>
+                <span class="text-slate-700">{{ waitingCount }} day{{ waitingCount > 1 ? 's' : '' }} waiting or syncing in this month.<template v-if="calendar?.progress"> Now: {{ calendar.progress }}.</template></span>
                 <button class="btn-ghost" :disabled="busy" @click="runNow">Run now</button>
                 <button class="btn-ghost" :disabled="busy" @click="cancelWaiting">Cancel waiting</button>
             </div>

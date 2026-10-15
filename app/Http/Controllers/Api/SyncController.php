@@ -10,6 +10,7 @@ use App\Models\Client;
 use App\Runner\HostedStatusPuller;
 use App\Support\CurrentClient;
 use App\Sync\MasterSync;
+use App\Sync\SyncProgress;
 use App\Sync\WorkerLauncher;
 use App\Sync\SyncDispatcher;
 use Carbon\CarbonImmutable;
@@ -50,6 +51,7 @@ class SyncController extends Controller
             'month' => $data['month'],
             'today' => CarbonImmutable::now($client->timezone)->toDateString(),
             'packages' => config('sync.packages'),
+            'progress' => SyncProgress::get($client->id),
             'master_synced_at' => $client->master_synced_at?->toIso8601String(),
             // Each kind of reference data with the time it was last refreshed (the sync rewrites updated_at on every row).
             'master' => app(CurrentClient::class)->runAs($client, fn () => collect(MasterSync::KINDS)->map(fn ($kind, $key) => [

@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Client;
 use App\Models\SyncDay;
 use App\Runner\LocalSyncService;
+use App\Sync\SyncProgress;
 use App\Sync\SyncRunner;
 use DateTime;
 use Illuminate\Bus\Queueable;
@@ -60,6 +61,8 @@ class SyncClientDays implements ShouldQueue
             $this->upload($client, $uploader ?? app(LocalSyncService::class));
         } catch (Throwable $e) {
             $this->fail($e);
+        } finally {
+            SyncProgress::clear($this->clientId);
         }
     }
 
@@ -86,6 +89,7 @@ class SyncClientDays implements ShouldQueue
             }
 
             try {
+                SyncProgress::set($client->id, 'Uploading '.$package.' to the hosted app');
                 $uploader->push($client, $package, $done);
             } catch (Throwable $e) {
                 SyncDay::where('client_id', $client->id)->where('package', $package)->whereIn('date', $done)

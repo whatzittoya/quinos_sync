@@ -33,6 +33,7 @@ class SyncRunner
             $master = new MasterSync($quinos, $client);
 
             if ($dates === [] || $force || $master->isStale()) {
+                SyncProgress::set($client->id, 'Refreshing master data');
                 $master->sync($dates === [] ? $masterKinds : null);
             }
         } catch (Throwable $e) {
@@ -47,6 +48,7 @@ class SyncRunner
             }
 
             try {
+                SyncProgress::set($client->id, 'Syncing '.$package);
                 $counts = $this->package($package, $quinos, $client)->sync($dates, $force);
             } catch (Throwable $e) {
                 $this->mark($client, [$package], $dates, ['status' => SyncDay::FAILED, 'error' => $this->message($e)]);
