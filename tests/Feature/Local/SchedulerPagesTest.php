@@ -309,4 +309,36 @@ class SchedulerPagesTest extends TestCase
         $this->postJson('/api/sync/pull-status')->assertOk()->assertJsonPath('pulled', 0)
             ->assertJsonPath('error', 'Could not reach the hosted app. Check this PC\'s internet connection.');
     }
+
+    public function test_upload_retries_a_dropped_connection_but_not_a_server_answer(): void
+    {
+        config(['runner.retry_delay_ms' => 0, 'runner.retries' => 3]);
+        \App\Models\LocalSetting::create(['hosted_api_url' => 'https://host.example', 'runner_token' => str_repeat('s', 64)]);
+        $calls = 0;
+        $reject = false;
+        \Illuminate\Support\Facades\Http::fake(function () use (&$calls, &$reject) {
+            $calls++;
+            if ($reject) {
+                return \Illuminate\Support\Facades\Http::response(['message' => 'No'], 422);
+            }
+            if ($calls < 3) {
+                throw new \Illuminate\Http\Client\ConnectionException('cURL error 28: Timeout was reached');
+            }
+
+            return \Illuminate\Support\Facades\Http::response(['tenants' => [['id' => 1]]]);
+        });
+
+        $this->assertSame([['id' => 1]], app(RunnerApi::class)->tenants());
+        $this->assertSame(3, $calls, 'two dropped connections are retried, the third attempt answers');
+
+        $reject = true;
+        $calls = 0;
+        try {
+            app(RunnerApi::class)->begin('id', 1, 'sales', ['2026-10-14'], now()->toIso8601String(), null, [['tables' => []]]);
+            $this->fail('A 422 must not be swallowed');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('No', $e->getMessage());
+        }
+        $this->assertSame(1, $calls, 'a server answer is not retried');
+    }
 }
