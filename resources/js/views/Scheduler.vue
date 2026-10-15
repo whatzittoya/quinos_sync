@@ -76,6 +76,14 @@ async function loadLogs(page = 1) {
 
 watch(filter, () => loadLogs(1), { deep: true });
 
+// Reload the page you are on, keeping the filters.
+const refreshing = ref(false);
+async function refreshLogs() {
+    refreshing.value = true;
+    await loadLogs(meta.value.page);
+    refreshing.value = false;
+}
+
 const fmt = (iso) => (iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'medium' }) : '');
 const TONE = { success: 'bg-green-100 text-green-800', failed: 'bg-red-100 text-red-800', running: 'bg-sky-100 text-sky-800' };
 const range = (dates) => (!dates?.length ? 'all' : dates.length === 1 ? dates[0] : `${dates[0]} → ${dates[dates.length - 1]}`);
@@ -173,6 +181,7 @@ onMounted(async () => {
                     <select v-model="filter.trigger" class="field !w-auto"><option value="">Any</option><option value="scheduled">Scheduler</option><option value="manual">Manual</option></select>
                 </label>
                 <button class="btn-ghost" @click="filter = { client_id: '', from: '', to: '', status: '', trigger: '' }">Clear</button>
+                <button class="btn-ghost ml-auto" :disabled="refreshing" @click="refreshLogs">{{ refreshing ? 'Refreshing…' : 'Refresh' }}</button>
             </div>
 
             <p v-if="logError" class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{{ logError }}</p>
