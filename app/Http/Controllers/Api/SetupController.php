@@ -55,7 +55,10 @@ class SetupController
                 try { $currentToken = LocalSetting::first()?->runner_token; } catch (Throwable) { /* replace an unreadable old token */ }
             }
             $this->ensureDatabase($data);
-            config(['database.default' => 'mysql', 'database.connections.mysql.url' => null,
+            [$data['db_charset'], $data['db_collation']] = $this->detectCharset($data);
+            config(['database.default' => 'mysql',
+                'database.connections.mysql.charset' => $data['db_charset'],
+                'database.connections.mysql.collation' => $data['db_collation'], 'database.connections.mysql.url' => null,
                 'database.connections.mysql.unix_socket' => '',
                 'database.connections.mysql.host' => $data['db_host'],
                 'database.connections.mysql.port' => $data['db_port'],
@@ -118,6 +121,25 @@ class SetupController
         return mb_substr(preg_replace('/(password|token|secret)[^:=]*[:=]\s*[^,}\s]+/i', '$1: [hidden]', $message), 0, 400);
     }
 
+    /** utf8mb4 where the server has it; MySQL before 5.5.3 only has the 3-byte utf8. */
+    protected function detectCharset(array $data): array
+    {
+        $pdo = new PDO("mysql:host={$data['db_host']};port={$data['db_port']};dbname={$data['db_database']}", $data['db_username'], $data['db_password'],
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 10]);
+
+        try {
+            $pdo->exec('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci');
+
+            return ['utf8mb4', 'utf8mb4_unicode_ci'];
+        } catch (PDOException $e) {
+            if (! in_array((int) ($e->errorInfo[1] ?? 0), [1115, 1273, 2019], true)) {
+                throw $e;
+            }
+
+            return ['utf8', 'utf8_unicode_ci'];
+        }
+    }
+
     protected function ensureDatabase(array $data): void
     {
         $dsn = "mysql:host={$data['db_host']};port={$data['db_port']};charset=utf8mb4";
@@ -128,7 +150,12 @@ class SetupController
         } catch (PDOException $e) {
             if (($e->errorInfo[1] ?? null) !== 1049) throw $e;
             $pdo = new PDO($dsn, $data['db_username'], $data['db_password'], $options);
-            $pdo->exec('CREATE DATABASE `'.$data['db_database'].'` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+            try {
+                $pdo->exec('CREATE DATABASE `'.$data['db_database'].'` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+            } catch (PDOException $created) {
+                if (($created->errorInfo[1] ?? null) !== 1115) throw $created;
+                $pdo->exec('CREATE DATABASE `'.$data['db_database'].'` CHARACTER SET utf8 COLLATE utf8_unicode_ci'); // MySQL before 5.5.3
+            }
         }
     }
 
@@ -139,7 +166,8 @@ class SetupController
         foreach (['DB_CONNECTION' => 'mysql', 'DATABASE_URL' => '', 'DB_SOCKET' => '',
             'DB_HOST' => $data['db_host'], 'DB_PORT' => $data['db_port'],
             'DB_DATABASE' => $data['db_database'], 'DB_USERNAME' => $data['db_username'],
-            'DB_PASSWORD' => $data['db_password'], 'APP_DEBUG' => 'false'] as $key => $value) {
+            'DB_PASSWORD' => $data['db_password'], 'APP_DEBUG' => 'false',
+            'DB_CHARSET' => $data['db_charset'] ?? 'utf8mb4', 'DB_COLLATION' => $data['db_collation'] ?? 'utf8mb4_unicode_ci'] as $key => $value) {
             $line = $key.'='.$this->envValue((string) $value);
             $pattern = '/^'.preg_quote($key, '/').'=.*$/m';
             $content = preg_match($pattern, $content)

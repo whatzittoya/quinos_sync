@@ -21,12 +21,12 @@ return new class extends Migration {
             $table->foreignId('runner_token_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('client_id')->constrained()->cascadeOnDelete();
             $table->string('package', 30);
-            $table->json('dates');
+            $table->text('dates');
             $table->timestamp('source_synced_at');
             $table->timestamp('purchase_cutoff')->nullable();
             $table->unsignedInteger('chunk_count');
             $table->string('status', 20)->default('waiting');
-            $table->json('counts')->nullable();
+            $table->text('counts')->nullable();
             $table->string('error', 500)->nullable();
             $table->timestamp('completed_at')->nullable();
             $table->timestamps();

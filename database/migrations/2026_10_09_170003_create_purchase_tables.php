@@ -34,7 +34,7 @@ return new class extends Migration
         Schema::create('purchase_invoices', function (Blueprint $table) {
             $this->header($table);
             $table->boolean('direct')->default(false);
-            $table->json('receipt_ids')->nullable(); // Quinos ids of the goods receipts it covers
+            $table->text('receipt_ids')->nullable(); // Quinos ids of the goods receipts it covers
             $table->decimal('balance', 18, 2)->default(0);
         });
     }
