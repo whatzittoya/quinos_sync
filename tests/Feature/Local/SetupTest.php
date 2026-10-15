@@ -46,4 +46,32 @@ class SetupTest extends TestCase
         $value=$method->invoke(new SetupController,$password);
         $this->assertSame($password,\Dotenv\Dotenv::parse('DB_PASSWORD='.$value)['DB_PASSWORD']);
     }
+
+    /** @dataProvider mysqlFailures */
+    public function test_setup_says_what_mysql_failed_with(int $code, string $host, string $expected): void
+    {
+        $e = new \PDOException('SQLSTATE[HY000] [' . $code . '] password=private-secret');
+        $e->errorInfo = ['HY000', $code, 'x'];
+        $controller = \Mockery::mock(SetupController::class)->makePartial()->shouldAllowMockingProtectedMethods();
+        $controller->shouldReceive('ensureDatabase')->andThrow($e);
+        $this->app->instance(SetupController::class, $controller);
+
+        $response = $this->postJson('/api/setup', [
+            'db_host' => $host, 'db_port' => 3306, 'db_database' => 'd', 'db_username' => 'root',
+            'db_password' => 'private-secret', 'hosted_api_url' => 'https://host.example', 'runner_token' => str_repeat('s', 64),
+        ])->assertUnprocessable();
+
+        $this->assertStringContainsString("MySQL error {$code}", $response->json('message'));
+        $this->assertStringContainsString($expected, $response->json('message'));
+        $this->assertStringNotContainsString('private-secret', $response->getContent());
+    }
+
+    public static function mysqlFailures(): array
+    {
+        return [
+            'wrong password' => [1045, '127.0.0.1', 'username or password is wrong'],
+            'not running on localhost' => [2002, 'localhost', 'try 127.0.0.1'],
+            'not running on an ip' => [2002, '127.0.0.1', 'host and port are right'],
+        ];
+    }
 }

@@ -77,16 +77,45 @@ class SetupController
             $stage = 'writing local configuration';
             $this->writeEnv($data);
             return response()->json(['ok' => true, 'message' => 'Setup complete.']);
-        } catch (PDOException) {
-            return response()->json(['message' => 'Could not connect to MySQL. Check that MySQL is running and the database username, password, host and port are correct. The user must have permission to create tables.'], 422);
+        } catch (PDOException $e) {
+            report($e);
+            return response()->json(['message' => $this->databaseMessage($e, $stage, $data['db_host'])], 422);
         } catch (Throwable $e) {
             report($e);
-            $message = preg_replace('/(password|token|secret)[^:]*:\s*[^,}]+/i', '$1: [hidden]', $e->getMessage());
+            $message = $this->redact($e->getMessage());
             return response()->json(['message' => 'Setup failed while '.$stage.'. '.$message], 422);
         } finally {
             flock($lock, LOCK_UN);
             fclose($lock);
         }
+    }
+
+    /** Say what failed without echoing the server's raw message (it can contain credentials). */
+    private function databaseMessage(PDOException $e, string $stage, string $host): string
+    {
+        $code = (int) ($e->errorInfo[1] ?? 0) ?: (preg_match('/\[(\d{4})\]/', $e->getMessage(), $m) ? (int) $m[1] : 0);
+        $suffix = $code ? " (MySQL error {$code})" : '';
+
+        if ($stage !== 'checking MySQL') {
+            return "Setup failed while {$stage}{$suffix}. ".$this->redact($e->getMessage());
+        }
+
+        $hint = match ($code) {
+            1045 => 'The username or password is wrong. A fresh XAMPP root user has an empty password.',
+            1044 => 'This user has no permission on that database. Use root, or create the database first.',
+            2002, 2003 => in_array(strtolower($host), ['localhost', '::1'], true)
+                ? 'MySQL did not answer. Check that MySQL is running in XAMPP, then try 127.0.0.1 instead of localhost.'
+                : 'MySQL did not answer. Check that MySQL is running and the host and port are right.',
+            2006, 2013 => 'MySQL closed the connection. Restart it in XAMPP and try again.',
+            default => 'Check that MySQL is running and the database username, password, host and port are correct. The user must have permission to create tables.',
+        };
+
+        return "Could not connect to MySQL{$suffix}. {$hint}";
+    }
+
+    private function redact(string $message): string
+    {
+        return mb_substr(preg_replace('/(password|token|secret)[^:=]*[:=]\s*[^,}\s]+/i', '$1: [hidden]', $message), 0, 400);
     }
 
     protected function ensureDatabase(array $data): void
