@@ -13,8 +13,11 @@ class LocalSyncService {
  public function run(?int $onlyTenant=null,bool $masterOnly=false,?int $retryRun=null,bool $reportsOnly=false,string $trigger='manual'): LocalSyncRun {
   $this->closeAbandoned();
   $run=LocalSyncRun::create(['run_uuid'=>(string) Str::uuid(),'status'=>'running','trigger'=>$trigger,'started_at'=>now()]);
+  // If the process is cut off (time limit, closed window) its rows would stay 'running' for good; close them on the way out.
+  $finished=false; register_shutdown_function(function() use($run,&$finished){ if($finished)return; try{ $run->items()->where('status','running')->update(['status'=>'failed','error'=>'Stopped before it finished (the process was cut off, for example by a time limit).','finished_at'=>now()]); $run->update(['status'=>'failed','finished_at'=>now()]); }catch(Throwable){} });
   try { $tenants=$this->api->tenants(); foreach($tenants as $config){if($onlyTenant!==null && (int)$config['id']!==$onlyTenant)continue; $this->tenant($run,$config,$masterOnly,$reportsOnly,$trigger==='scheduled');} $run->update(['status'=>$run->items()->where('status','failed')->exists()?'failed':'success','finished_at'=>now()]); }
   catch(Throwable $e){$run->update(['status'=>'failed','error'=>$this->safe($e),'finished_at'=>now()]);}
+  $finished=true;
   return $run;
  }
  /** Create or refresh the local copy of a hosted tenant. The local `scheduled` choice is never overwritten. */
