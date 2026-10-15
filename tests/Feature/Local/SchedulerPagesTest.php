@@ -155,4 +155,19 @@ class SchedulerPagesTest extends TestCase
         $this->postJson('/api/local-runner/scheduler', ['kind' => 'reports', 'action' => 'create', 'time' => '6am'])
             ->assertJsonValidationErrors('time');
     }
+
+    public function test_scheduled_task_uses_php_exe_not_apaches_httpd_exe(): void
+    {
+        $dir = sys_get_temp_dir().'/phpbin_'.uniqid();
+        mkdir($dir.'/apache', 0777, true);
+        mkdir($dir.'/php', 0777, true);
+        touch($dir.'/apache/httpd.exe');
+        touch($dir.'/php/php.exe');
+
+        $picked = \App\Services\WindowsTaskScheduler::pickPhp([null, '', $dir.'/apache/httpd.exe', $dir.'/missing/php.exe', $dir.'/php/php.exe']);
+
+        $this->assertSame($dir.'/php/php.exe', $picked);
+        $this->expectException(\RuntimeException::class);
+        \App\Services\WindowsTaskScheduler::pickPhp([$dir.'/apache/httpd.exe']);
+    }
 }
