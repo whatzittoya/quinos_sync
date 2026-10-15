@@ -16,10 +16,20 @@ if exist public\hot del /Q public\hot >nul
 if not exist .env copy .env.example .env >nul
 php bootstrap-local.php
 if errorlevel 1 goto fail
-if not exist public\build\manifest.json (
+rem Rebuild the frontend on every start, so a git pull shows up. Machines without Node keep the build they were given.
+where npm >nul 2>nul
+if errorlevel 1 (
+    if not exist public\build\manifest.json (
+        echo Node.js was not found and there is no frontend build. Install Node.js and run this file again.
+        goto fail
+    )
+) else (
+    if not exist node_modules (
+        echo Installing frontend dependencies...
+        call npm ci
+        if errorlevel 1 goto fail
+    )
     echo Building frontend...
-    call npm ci
-    if errorlevel 1 goto fail
     call npm run build
     if errorlevel 1 goto fail
 )
