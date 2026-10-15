@@ -86,6 +86,14 @@ async function refreshLogs() {
 
 const fmt = (iso) => (iso ? new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'medium' }) : '');
 const TONE = { success: 'bg-green-100 text-green-800', failed: 'bg-red-100 text-red-800', running: 'bg-sky-100 text-sky-800' };
+// How long a finished step took: 45s, 3m 05s, 1h 02m.
+function duration(l) {
+    if (!l.started_at || !l.finished_at) return '';
+    const sec = Math.max(0, Math.round((new Date(l.finished_at) - new Date(l.started_at)) / 1000));
+    if (sec < 60) return `${sec}s`;
+    const m = Math.floor(sec / 60);
+    return m < 60 ? `${m}m ${String(sec % 60).padStart(2, '0')}s` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
+}
 const range = (dates) => (!dates?.length ? 'all' : dates.length === 1 ? dates[0] : `${dates[0]} → ${dates[dates.length - 1]}`);
 
 onMounted(async () => {
@@ -189,10 +197,10 @@ onMounted(async () => {
             <div class="card overflow-x-auto">
                 <table class="w-full text-left text-sm">
                     <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                        <tr><th class="p-3">Started</th><th class="p-3">Client</th><th class="p-3">Data</th><th class="p-3">Days</th><th class="p-3">By</th><th class="p-3">Status</th><th class="p-3 text-right">Rows</th><th class="p-3">Finished</th><th class="p-3">Error</th></tr>
+                        <tr><th class="p-3">Started</th><th class="p-3">Client</th><th class="p-3">Data</th><th class="p-3">Days</th><th class="p-3">By</th><th class="p-3">Status</th><th class="p-3 text-right">Rows</th><th class="p-3">Finished</th><th class="p-3 text-right">Duration</th><th class="p-3">Error</th></tr>
                     </thead>
                     <tbody>
-                        <tr v-if="!logs.length"><td colspan="9" class="p-6 text-center text-slate-500">Nothing has run yet.</td></tr>
+                        <tr v-if="!logs.length"><td colspan="10" class="p-6 text-center text-slate-500">Nothing has run yet.</td></tr>
                         <tr v-for="l in logs" :key="l.id" class="border-t border-slate-100 align-top">
                             <td class="whitespace-nowrap p-3">{{ fmt(l.started_at) }}</td>
                             <td class="p-3">{{ l.client }}</td>
@@ -202,6 +210,7 @@ onMounted(async () => {
                             <td class="p-3"><span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="TONE[l.status] ?? 'bg-slate-100 text-slate-600'">{{ l.status }}</span></td>
                             <td class="p-3 text-right tabular-nums">{{ l.rows }}</td>
                             <td class="whitespace-nowrap p-3">{{ fmt(l.finished_at) }}</td>
+                            <td class="whitespace-nowrap p-3 text-right tabular-nums">{{ duration(l) }}</td>
                             <td class="max-w-xs p-3 text-red-700">{{ l.error }}</td>
                         </tr>
                     </tbody>

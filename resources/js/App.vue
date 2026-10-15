@@ -74,7 +74,7 @@ watch(() => route.path, () => { drawer.value = false; });
                 <span class="font-semibold tracking-tight">Quinos Local Sync</span>
             </header>
 
-            <main class="w-full max-w-6xl px-4 py-6">
+            <main class="w-full px-4 py-6" :class="!route.meta.wide && 'max-w-6xl'">
                 <RouterView />
             </main>
         </div>

@@ -8,7 +8,7 @@ const router = createRouter({
         { path: '/', redirect: '/dashboard' },
         { path: '/dashboard', name: 'dashboard', component: () => import('./views/Dashboard.vue') },
         { path: '/sync', name: 'sync', component: () => import('./views/Sync.vue') },
-        { path: '/scheduler', name: 'scheduler', component: () => import('./views/Scheduler.vue') },
+        { path: '/scheduler', name: 'scheduler', meta: { wide: true }, component: () => import('./views/Scheduler.vue') },
         { path: '/connection', name: 'connection', component: () => import('./views/Connection.vue') },
         { path: '/local-runner', redirect: '/scheduler' },
         { path: '/:pathMatch(.*)*', redirect: '/' },
