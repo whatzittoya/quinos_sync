@@ -25,13 +25,21 @@ class SyncRunner
     {
         // A client's Quinos login session is shared, so two syncs of it at once (for example the Master and
         // Reports tasks, or a task and the Sync page) disturb each other. Wait for the running one to finish.
-        Cache::lock('quinos-sync-client:'.$client->id, 3900)->block(
-            (int) config('sync.lock_wait', 3600),
-            fn () => $this->runLocked($client, $dates, $force, $masterKinds, $packages),
-        );
+        $lock = Cache::lock('quinos-sync-client:'.$client->id, 1800);
+        $lock->block((int) config('sync.lock_wait', 3600));
+
+        // A process cut off by a time limit skips `finally`, but shutdown functions still run. Without this
+        // the lock would stay held until it expires and block every later sync of the client.
+        register_shutdown_function(fn () => $lock->release());
+
+        try {
+            $this->runLocked($client, $dates, $force, $masterKinds, $packages);
+        } finally {
+            $lock->release();
+        }
     }
 
-    private function runLocked(Client $client, array $dates, bool $force, ?array $masterKinds, ?array $packages): void
+    protected function runLocked(Client $client, array $dates, bool $force, ?array $masterKinds, ?array $packages): void
     {
         $quinos = QuinosClient::for($client);
         $packages = $packages === null
