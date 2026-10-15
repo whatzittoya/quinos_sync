@@ -170,4 +170,21 @@ class SchedulerPagesTest extends TestCase
         $this->expectException(\RuntimeException::class);
         \App\Services\WindowsTaskScheduler::pickPhp([$dir.'/apache/httpd.exe']);
     }
+
+    public function test_a_day_with_no_documents_still_uploads_one_empty_chunk(): void
+    {
+        $client = $this->client('Zali');
+        \App\Models\LocalSetting::create(['hosted_api_url' => 'https://host.example', 'runner_token' => str_repeat('s', 64)]);
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response(['counts' => ['sales_transactions' => 0]])]);
+
+        $rows = (new LocalSyncService(app(RunnerApi::class)))->push($client, 'sales', ['2026-10-13']);
+
+        $this->assertSame(0, $rows);
+        $sent = collect(\Illuminate\Support\Facades\Http::recorded())->map(fn ($pair) => $pair[0]);
+        $begin = $sent->first(fn ($r) => $r->method() === 'POST' && str_ends_with($r->url(), '/imports'));
+        $chunk = $sent->first(fn ($r) => $r->method() === 'PUT');
+        $this->assertSame(1, $begin['chunk_count']);
+        $this->assertStringEndsWith('/chunks/0', $chunk->url());
+        $this->assertSame(['sales_transactions' => []], $chunk['tables']);
+    }
 }
