@@ -37,7 +37,7 @@ async function act(fn, done) {
     }
 }
 
-const schedule = (kind, action) => act(() => api('/local-runner/scheduler', { method: 'POST', body: { kind, action, time: schedules.value[kind].run_time } }), `Scheduler ${action} done`);
+const schedule = (kind, action) => act(() => api('/local-runner/scheduler', { method: 'POST', body: { kind, action, time: schedules.value[kind].run_time?.slice(0, 5) } }), `Scheduler ${action} done`);
 const runNow = (mode) => act(() => api('/local-runner/runs', { method: 'POST', body: { master_only: mode === 'master', reports_only: mode === 'reports' } }), 'Run finished');
 const refreshClients = () => act(() => api('/clients', { query: { refresh: 1 } }), 'Clients refreshed');
 
@@ -143,7 +143,7 @@ onMounted(async () => {
                     <p class="text-xs text-slate-500">{{ KINDS[editing].collects }}</p>
                 </div>
                 <label class="block text-xs text-slate-600">Run every day at
-                    <input v-model="schedules[editing].run_time" class="field mt-1" type="time">
+                    <input v-model="schedules[editing].run_time" class="field mt-1" type="time" step="60">
                 </label>
                 <div class="text-xs text-slate-500">Status: <strong>{{ schedules[editing].enabled ? 'Enabled' : 'Disabled' }}</strong></div>
                 <div class="flex flex-wrap gap-1.5">

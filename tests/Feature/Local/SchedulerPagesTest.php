@@ -146,4 +146,13 @@ class SchedulerPagesTest extends TestCase
     {
         $this->get('/dashboard')->assertOk()->assertSee('<meta name="app-base" content="">', false);
     }
+
+    public function test_scheduler_accepts_a_time_with_seconds_from_the_browser(): void
+    {
+        $this->postJson('/api/local-runner/scheduler', ['kind' => 'reports', 'action' => 'create', 'time' => '06:00:00'])
+            ->assertStatus(422)
+            ->assertJsonMissingValidationErrors('time'); // fails later only because Windows Task Scheduler is not here
+        $this->postJson('/api/local-runner/scheduler', ['kind' => 'reports', 'action' => 'create', 'time' => '6am'])
+            ->assertJsonValidationErrors('time');
+    }
 }
