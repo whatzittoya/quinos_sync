@@ -17,12 +17,14 @@ if not exist .env copy .env.example .env >nul
 php bootstrap-local.php
 if errorlevel 1 goto fail
 rem Rebuild the frontend on every start, so a git pull shows up. Machines without Node keep the build they were given.
-where npm >nul 2>nul
+call npm --version >nul 2>nul
 if errorlevel 1 (
     if not exist public\build\manifest.json (
         echo Node.js was not found and there is no frontend build. Install Node.js and run this file again.
         goto fail
     )
+    echo WARNING: npm was not found, so the existing frontend build is kept and may be out of date.
+    echo Install Node.js, open a NEW Command Prompt, and run this file again to rebuild it.
 ) else (
     if not exist node_modules (
         echo Installing frontend dependencies...
