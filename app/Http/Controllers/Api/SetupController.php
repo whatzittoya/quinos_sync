@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 use PDO;
 use PDOException;
 use RuntimeException;
@@ -30,7 +31,7 @@ class SetupController
                 $ready = $settings && filled($settings->hosted_api_url) && filled($settings->runner_token);
             }
         } catch (Throwable) { /* First run may have no configured database. */ }
-        return ['ready' => (bool) $ready, 'migrated' => $migrated, 'database' => ['host' => env('DB_HOST', '127.0.0.1'), 'port' => (int) env('DB_PORT', 3306), 'database' => env('DB_DATABASE', ''), 'username' => env('DB_USERNAME', 'root')], 'hosted_api_url' => $hostedApiUrl ?: env('RUNNER_API_URL', 'https://quinos.qaccounting.id'), 'token_configured' => $migrated && $tokenConfigured];
+        return ['ready' => (bool) $ready, 'migrated' => $migrated, 'pending_migrations' => $migrated ? $this->pendingMigrations() : null, 'database' => ['host' => env('DB_HOST', '127.0.0.1'), 'port' => (int) env('DB_PORT', 3306), 'database' => env('DB_DATABASE', ''), 'username' => env('DB_USERNAME', 'root')], 'hosted_api_url' => $hostedApiUrl ?: env('RUNNER_API_URL', 'https://quinos.qaccounting.id'), 'token_configured' => $migrated && $tokenConfigured];
     }
 
     public function store(Request $request): JsonResponse
@@ -42,9 +43,15 @@ class SetupController
             'db_username' => ['required', 'string', 'max:128'],
             'db_password' => ['nullable', 'string', 'max:255', 'not_regex:/[\r\n\x00]/'],
             'hosted_api_url' => ['required', 'url:http,https', 'max:500'],
-            'runner_token' => ['required', 'string', 'min:32', 'max:255'],
+            // Required on first setup; afterwards blank keeps the saved token.
+            'runner_token' => [Rule::requiredIf(fn () => ! $this->tokenSaved()), 'nullable', 'string', 'min:32', 'max:255'],
         ]);
-        $data['db_password'] ??= '';
+        // The password field is blank when the page loads. Blank with the same connection keeps the saved password,
+        // instead of writing an empty one to .env; changing the connection needs it entered again.
+        $saved = config('database.connections.mysql');
+        $sameConnection = $data['db_host'] === (string) $saved['host'] && (int) $data['db_port'] === (int) $saved['port']
+            && $data['db_database'] === (string) $saved['database'] && $data['db_username'] === (string) $saved['username'];
+        $data['db_password'] ??= $sameConnection ? (string) ($saved['password'] ?? '') : '';
         $lock = fopen(storage_path('framework/setup.lock'), 'c');
         abort_unless($lock && flock($lock, LOCK_EX | LOCK_NB), 409, 'Setup is already running.');
         $stage = 'checking MySQL';
@@ -90,6 +97,52 @@ class SetupController
         } finally {
             flock($lock, LOCK_UN);
             fclose($lock);
+        }
+    }
+
+    /** Applies new migrations (for example after a git pull) with the saved connection; nothing has to be entered again. */
+    public function migrate(): JsonResponse
+    {
+        $lock = fopen(storage_path('framework/setup.lock'), 'c');
+        abort_unless($lock && flock($lock, LOCK_EX | LOCK_NB), 409, 'Setup is already running.');
+        try {
+            @set_time_limit(180);
+            $pending = $this->pendingMigrations();
+            if (Artisan::call('migrate', ['--force' => true]) !== 0) {
+                throw new RuntimeException('Migration failed.');
+            }
+
+            return response()->json(['ok' => true, 'applied' => $pending, 'message' => $pending ? "Database updated ({$pending} change".($pending === 1 ? '' : 's').')' : 'Database is already up to date.']);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Could not update the database. '.$this->redact($e->getMessage())], 422);
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+    }
+
+    private function tokenSaved(): bool
+    {
+        try {
+            return filled(LocalSetting::first()?->runner_token);
+        } catch (Throwable) {
+            return false; // no database yet
+        }
+    }
+
+    private function pendingMigrations(): int
+    {
+        try {
+            $migrator = app('migrator');
+            if (! $migrator->repositoryExists()) {
+                return count($migrator->getMigrationFiles([database_path('migrations')]));
+            }
+
+            return count(array_diff(array_keys($migrator->getMigrationFiles([database_path('migrations')])), $migrator->getRepository()->getRan()));
+        } catch (Throwable) {
+            return 0;
         }
     }
 

@@ -38,6 +38,36 @@ class SetupTest extends TestCase
         $this->assertStringNotContainsString('private-secret',$response->getContent());
         $this->getJson('/api/setup/status')->assertJsonPath('ready',false);
     }
+    public function test_update_database_applies_pending_migrations_without_re_entering_settings(): void
+    {
+        LocalSetting::create(['hosted_api_url'=>'https://host.example','runner_token'=>str_repeat('s',64)]);
+        $this->getJson('/api/setup/status')->assertJsonPath('pending_migrations',0);
+        $this->artisan('migrate:rollback',['--step'=>1,'--force'=>true]); // as if a git pull brought a new migration
+        $this->assertFalse(\Illuminate\Support\Facades\Schema::hasTable('pos_transactions'));
+        $this->getJson('/api/setup/status')->assertJsonPath('pending_migrations',1);
+
+        $this->postJson('/api/setup/migrate')->assertOk()->assertJsonPath('applied',1)->assertJsonPath('message','Database updated (1 change)');
+
+        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasTable('pos_transactions'));
+        $this->getJson('/api/setup/status')->assertJsonPath('pending_migrations',0);
+        $this->postJson('/api/setup/migrate')->assertOk()->assertJsonPath('message','Database is already up to date.');
+    }
+    public function test_saving_settings_keeps_the_saved_token_and_password_when_left_blank(): void
+    {
+        LocalSetting::create(['hosted_api_url'=>'https://host.example','runner_token'=>str_repeat('s',64)]);
+        config(['database.connections.mysql.host'=>'127.0.0.1','database.connections.mysql.port'=>3306,'database.connections.mysql.database'=>'db_quinos_sync',
+            'database.connections.mysql.username'=>'root','database.connections.mysql.password'=>'saved-secret']);
+        $seen = [];
+        $controller = \Mockery::mock(SetupController::class)->makePartial()->shouldAllowMockingProtectedMethods();
+        $controller->shouldReceive('ensureDatabase')->andReturnUsing(function ($data) use (&$seen) { $seen[] = $data['db_password']; throw new \PDOException('stop here'); });
+        $this->app->instance(SetupController::class,$controller);
+        $form = ['db_host'=>'127.0.0.1','db_port'=>3306,'db_database'=>'db_quinos_sync','db_username'=>'root','hosted_api_url'=>'https://host.example'];
+
+        $this->postJson('/api/setup',$form)->assertUnprocessable()->assertJsonMissingValidationErrors(['runner_token','db_password']);
+        $this->postJson('/api/setup',['db_database'=>'other_database']+$form)->assertUnprocessable();
+
+        $this->assertSame(['saved-secret',''],$seen); // same connection keeps it; another database needs it entered
+    }
     public function test_env_password_round_trips_special_characters(): void
     {
         $method=new \ReflectionMethod(SetupController::class,'envValue');

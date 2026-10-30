@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/setup/status', [SetupController::class, 'status']);
 Route::post('/setup', [SetupController::class, 'store']);
+Route::post('/setup/migrate', [SetupController::class, 'migrate'])->middleware('throttle:10,1');
 Route::get('/clients', [ClientsController::class, 'index']);
 Route::prefix('hosted-clients')->middleware('throttle:30,1')->group(function () {
     Route::get('', [ClientsController::class, 'hosted']);
