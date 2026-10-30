@@ -8,6 +8,7 @@ const route = useRoute();
 const nav = [
     { label: 'Dashboard', icon: 'home', to: '/dashboard' },
     { label: 'Sync', icon: 'calendar', to: '/sync' },
+    { label: 'Clients', icon: 'users', to: '/clients' },
     { label: 'Scheduler', icon: 'clock', to: '/scheduler' },
     { label: 'Connection', icon: 'key', to: '/connection' },
 ];

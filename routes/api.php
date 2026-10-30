@@ -11,6 +11,13 @@ use Illuminate\Support\Facades\Route;
 Route::get('/setup/status', [SetupController::class, 'status']);
 Route::post('/setup', [SetupController::class, 'store']);
 Route::get('/clients', [ClientsController::class, 'index']);
+Route::prefix('hosted-clients')->middleware('throttle:30,1')->group(function () {
+    Route::get('', [ClientsController::class, 'hosted']);
+    Route::post('', [ClientsController::class, 'store']);
+    Route::put('/{id}', [ClientsController::class, 'update'])->whereNumber('id');
+    Route::post('/{id}/mobile-api-key', [ClientsController::class, 'generateKey'])->whereNumber('id');
+    Route::delete('/{id}/mobile-api-key', [ClientsController::class, 'removeKey'])->whereNumber('id');
+});
 Route::get('/dashboard', DashboardController::class);
 Route::prefix('sync')->group(function () {
     Route::get('/calendar', [SyncController::class, 'calendar']);

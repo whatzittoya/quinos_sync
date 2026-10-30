@@ -12,5 +12,11 @@ class RunnerApi {
  public function begin(string $id,int $tenant,string $package,array $dates,string $source,?string $cutoff,array $chunks): array { $r=$this->client()->post('/api/runner/v1/imports',['id'=>$id,'client_id'=>$tenant,'package'=>$package,'dates'=>$dates,'source_synced_at'=>$source,'purchase_cutoff'=>$cutoff,'chunk_count'=>count($chunks)]); if(!$r->successful()) throw new RuntimeException($r->json('message') ?? 'Hosted import could not start.'); return $r->json(); }
  public function chunk(string $id,int $sequence,array $tables): void { $r=$this->client()->put('/api/runner/v1/imports/'.$id.'/chunks/'.$sequence,['tables'=>$tables]); if(!$r->successful()) throw new RuntimeException($r->json('message') ?? 'Hosted import chunk failed.'); }
  public function commit(string $id): array { $r=$this->client()->post('/api/runner/v1/imports/'.$id.'/commit'); if(!$r->successful()) throw new RuntimeException($r->json('message') ?? 'Hosted import commit failed.'); return $r->json(); }
+ /** Clients live on the hosted app; these create and change them there. Hosted's validation errors come back as local ones. */
+ public function createTenant(array $data): array { return $this->tenantCall('post','/api/runner/v1/tenants',$data); }
+ public function updateTenant(int $id,array $data): array { return $this->tenantCall('put','/api/runner/v1/tenants/'.$id,$data); }
+ public function generateMobileToken(int $id): array { return $this->tenantCall('post','/api/runner/v1/tenants/'.$id.'/mobile-api-token'); }
+ public function removeMobileToken(int $id): array { return $this->tenantCall('delete','/api/runner/v1/tenants/'.$id.'/mobile-api-token'); }
+ private function tenantCall(string $method,string $path,array $data=[]): array { $r=$this->client()->{$method}($path,$data); if($r->status()===422) throw \Illuminate\Validation\ValidationException::withMessages($r->json('errors') ?? ['hosted'=>[$r->json('message') ?? 'Invalid data.']]); if($r->status()===404) throw new RuntimeException('The hosted app does not support managing clients yet, or the client no longer exists. Deploy its latest version first.'); if(!$r->successful()) throw new RuntimeException($r->json('message') ?? 'Hosted request failed (HTTP '.$r->status().').'); return $r->json(); }
  public function test(): void { $this->tenants(); }
 }
