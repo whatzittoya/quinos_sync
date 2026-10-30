@@ -73,7 +73,7 @@ class ClientsController extends Controller
         });
     }
 
-    /** A new mobile API key. Hosted keeps only its hash, so the answer is the one chance to show it. */
+    /** A new mobile API key, replacing the old one. */
     public function generateKey(int $id, RunnerApi $api): JsonResponse
     {
         return $this->hostedCall(function () use ($api, $id) {
@@ -105,6 +105,7 @@ class ClientsController extends Controller
             'id' => $tenant['id'], 'name' => $tenant['name'], 'quinos_email' => $tenant['quinos_email'] ?? null,
             'has_quinos_password' => filled($tenant['quinos_password'] ?? null), 'timezone' => $tenant['timezone'],
             'has_mobile_api_token' => (bool) ($tenant['has_mobile_api_token'] ?? false),
+            'mobile_api_token' => $tenant['mobile_api_token'] ?? null, 'mobile_api_url' => $tenant['mobile_api_url'] ?? null,
         ];
     }
 

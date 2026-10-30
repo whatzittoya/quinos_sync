@@ -45,7 +45,7 @@ class HostedClientsTest extends TestCase
         $this->assertSame('Pescado Sanur', Client::find(7)->name); // same id as hosted
     }
 
-    public function test_generating_a_key_returns_it_once_without_the_quinos_password(): void
+    public function test_generating_a_key_returns_it_without_the_quinos_password(): void
     {
         Http::fake(['*/api/runner/v1/tenants/7/mobile-api-token' => Http::response([
             'token' => str_repeat('a', 40), 'url' => 'https://host.example/api/cloud2/x', 'tenant' => $this->tenant(['has_mobile_api_token' => true]),
@@ -69,9 +69,11 @@ class HostedClientsTest extends TestCase
 
     public function test_list_comes_from_hosted_and_refreshes_the_local_copy(): void
     {
-        Http::fake(['*/api/runner/v1/tenants' => Http::response(['tenants' => [$this->tenant(['has_mobile_api_token' => true])]])]);
+        Http::fake(['*/api/runner/v1/tenants' => Http::response(['tenants' => [$this->tenant(['has_mobile_api_token' => true,
+            'mobile_api_token' => str_repeat('b', 40), 'mobile_api_url' => 'https://host.example/api/cloud2/x'])]])]);
 
         $this->getJson('/api/hosted-clients')->assertOk()->assertJsonPath('data.0.has_mobile_api_token', true)
+            ->assertJsonPath('data.0.mobile_api_token', str_repeat('b', 40))->assertJsonPath('data.0.mobile_api_url', 'https://host.example/api/cloud2/x')
             ->assertJsonMissingPath('data.0.quinos_password');
         $this->assertTrue(Client::whereKey(7)->exists());
     }

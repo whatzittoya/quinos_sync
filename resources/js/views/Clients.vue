@@ -9,7 +9,8 @@ const error = ref('');
 const editing = ref(null); // null = closed, 0 = new, otherwise the client id
 const saving = ref(false);
 const formError = ref('');
-const apiKey = ref(null); // { client, token, url }, shown once
+const apiKey = ref(null); // { client, token, url }
+const showKey = (c) => { apiKey.value = { client: c.name, token: c.mobile_api_token, url: c.mobile_api_url }; };
 
 const TIMEZONES = [
     { value: 'Asia/Jakarta', label: 'WIB (Jakarta, UTC+7)' },
@@ -102,7 +103,7 @@ onMounted(load);
         <p v-if="error" role="alert" class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
 
         <div v-if="apiKey" class="card space-y-3 p-4">
-            <p class="text-sm">New mobile API key for <b>{{ apiKey.client }}</b>. Copy it now: it is shown only once.</p>
+            <p class="text-sm">Mobile API key for <b>{{ apiKey.client }}</b>.</p>
             <div class="flex gap-2">
                 <input :value="apiKey.token" readonly class="field font-mono" aria-label="API key">
                 <button class="btn-ghost shrink-0" @click="copy(apiKey.token)">Copy</button>
@@ -138,8 +139,13 @@ onMounted(load);
                             <span v-if="c.quinos_email && !c.has_quinos_password" class="ml-1 text-amber-600">(no password)</span>
                         </td>
                         <td class="whitespace-nowrap px-4 py-3">
-                            <span :class="c.has_mobile_api_token ? 'text-green-700' : 'text-slate-400'">{{ c.has_mobile_api_token ? 'Set' : 'Not set' }}</span>
-                            <button class="btn-ghost ml-2" @click="generateKey(c)">{{ c.has_mobile_api_token ? 'Regenerate' : 'Generate API key' }}</button>
+                            <template v-if="c.mobile_api_token">
+                                <code class="text-xs text-slate-600">{{ c.mobile_api_token.slice(0, 8) }}…</code>
+                                <button class="btn-ghost ml-1" @click="showKey(c)">Show</button>
+                            </template>
+                            <span v-else-if="c.has_mobile_api_token" class="text-amber-700" title="Set before keys could be shown again. Regenerate to see it.">Set (hidden)</span>
+                            <span v-else class="text-slate-400">Not set</span>
+                            <button class="btn-ghost ml-1" @click="generateKey(c)">{{ c.has_mobile_api_token ? 'Regenerate' : 'Generate API key' }}</button>
                             <button v-if="c.has_mobile_api_token" class="btn-ghost" @click="removeKey(c)">Remove</button>
                         </td>
                         <td class="px-4 py-3 text-right">
