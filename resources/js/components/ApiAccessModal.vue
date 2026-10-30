@@ -15,20 +15,17 @@ const busy = ref(false);
 const error = ref('');
 const copied = ref('');
 
-// One line to paste into an AI agent (Claude Code, Claude Desktop, Cursor, ...): it installs the MCP server with this
-// client's key and tells the agent what the server holds, so it can use it right away.
+// One short line to paste into an AI agent (Claude Code, Claude Desktop, Cursor, ...): it installs the MCP server with
+// this client's key. The server itself tells the agent how to use it (MCP instructions and tool descriptions), so the
+// prompt stays short enough not to be cut off when pasted.
 const agentPrompt = computed(() => {
     if (!mcpUrl.value || !token.value) return null;
     const name = 'quinos-' + (props.client.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'client');
-    const base = mcpUrl.value.slice(0, mcpUrl.value.lastIndexOf('/'));
-    return `Install the Quinos MCP server for ${props.client.name} and remember how to use it. `
-        + `API key: ${token.value}. In Claude Code run: claude mcp add --transport http ${name} ${mcpUrl.value} `
-        + `- in other agents add a remote MCP server (Streamable HTTP) at ${mcpUrl.value}, or at ${base} with the header "Authorization: Bearer ${token.value}". `
-        + `It holds the POS sales and purchasing of ${props.client.name} (amounts in IDR, dates in the client's timezone). `
-        + `Sales tools: list_stores (store codes and which days have data - start here), sales_summary (by day, weekday, hour, shift, sales type, payment, store), item_sales, list_transactions, get_transaction, void_report; voided bills, FOC bills (compliments, wastage, staff meals) and voided lines are not sales. `
-        + `Purchasing tools: purchase_summary (spend by supplier, month, week, category or item; basis received or ordered; reports which days are synced), list_purchase_orders, get_purchase_order (order to receipts to invoices), item_purchase_prices (price history per supplier), payables (unpaid supplier invoices). `
-        + `Sync tools: when the days you need are missing, call sync_days (package pos for sales, purchase for purchasing, at most 31 days per call), wait about a minute, check sync_status, then query again. `
-        + `Treat the API key like a password. After installing, call list_stores to confirm it works, and save these notes as a skill or memory so you know this server next time.`;
+    return `Install the Quinos MCP server for ${props.client.name} (API key ${token.value}). `
+        + `Claude Code: claude mcp add --transport http ${name} ${mcpUrl.value} `
+        + `- other agents: add a remote MCP server (Streamable HTTP) at ${mcpUrl.value}. `
+        + `It holds the POS sales and purchasing of ${props.client.name} and can pull missing days from Quinos; its instructions and tool descriptions explain how to use it. `
+        + `Then call list_stores to check it works, and save a short skill on using this server, without the API key.`;
 });
 
 // The link with yesterday's date filled in, to try it in a browser.
