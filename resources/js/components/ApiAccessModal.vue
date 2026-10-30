@@ -101,7 +101,7 @@ function copy(what, text) {
                         <button type="button" class="btn-ghost w-20 shrink-0" @click="copy('mcp', mcpUrl)">{{ copied === 'mcp' ? 'Copied' : 'Copy' }}</button>
                     </div>
                     <p class="mt-1 text-xs text-slate-500">
-                        Add it as a custom connector (remote MCP server, Streamable HTTP) in Claude or another AI assistant. Read-only: sales, items, bills and voids of this client.
+                        Add it as a custom connector (remote MCP server, Streamable HTTP) in Claude or another AI assistant. Read-only: sales, items, bills, voids and purchasing (orders, receipts, supplier prices, unpaid invoices) of this client.
                     </p>
                 </div>
             </template>
