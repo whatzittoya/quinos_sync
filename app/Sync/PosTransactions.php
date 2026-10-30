@@ -29,6 +29,12 @@ class PosTransactions
     public array $warnings = [];
 
     /**
+     * @param  array<string, string>  $paymentTypes  payment method name (upper case) => its type in Quinos (CASH,
+     *                                               CREDIT CARD, OTHER, ...), used as the payment line_code like the old API
+     */
+    public function __construct(private readonly array $paymentTypes = []) {}
+
+    /**
      * @return list<array{quinos_id: int, date: string, invoice_no: ?string, store_code: ?string, close_time: ?string, transaction: array, transaction_lines: list<array>}>
      */
     public function build(string $date, array $summary, array $items, array $payments, array $voidItems, array $voidTransactions, array $focLines = []): array
@@ -85,6 +91,12 @@ class PosTransactions
         usort($documents, fn ($a, $b) => strcmp((string) $a['close_time'], (string) $b['close_time']));
 
         return $documents;
+    }
+
+    /** The method's type as set up in Quinos; a method missing from that list falls back to a guess from its name. */
+    public function lineCodeFor(?string $name): string
+    {
+        return $this->paymentTypes[strtoupper(trim((string) $name))] ?? self::paymentLineCode($name);
     }
 
     public static function paymentLineCode(?string $name): string
@@ -240,7 +252,7 @@ class PosTransactions
     private function paymentLine(array $p, array $h): array
     {
         return $this->line([
-            'line_code' => self::paymentLineCode($p['name'] ?? $p['code'] ?? null),
+            'line_code' => $this->lineCodeFor($p['name'] ?? $p['code'] ?? null),
             'payment_code' => $this->s($p['code'] ?? null),
             'description' => $this->s($p['name'] ?? $p['code'] ?? null) ?? '',
             'quantity' => '1',

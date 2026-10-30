@@ -166,6 +166,7 @@ class PosSyncTest extends TestCase
                 'voidItems' => 'voidItemReport', 'voidTransactions' => 'voidTransactionReport', 'focLines' => 'focDetailReport'][$key];
             $quinos->details['/reports/pos/'.$path] = $props;
         }
+        $quinos->lists['/paymentMethods'] = [['id' => 1, 'name' => 'BNI', 'type' => 'CREDIT CARD'], ['id' => 2, 'name' => 'CASH', 'type' => 'CASH']];
         PosTransaction::create(['client_id' => $client->id, 'quinos_id' => 1, 'date' => '2026-10-01', 'transaction' => [], 'transaction_lines' => []]);
 
         $counts = (new PosSync(QuinosClient::for($client), $client))->sync(['2026-10-01']);
@@ -176,6 +177,7 @@ class PosSyncTest extends TestCase
             $quinos->requests('POST', '/reports/pos/paymentDetailReport')[0]['body']);
         $stored = PosTransaction::where('invoice_no', 'INV-000053')->first();
         $this->assertSame(Payload::POS_TRANSACTION, array_keys($stored->transaction)); // key order survives storage
+        $this->assertSame(['CASH', 'CREDIT CARD'], array_column(array_filter($stored->transaction_lines, fn ($l) => $l['payment_code']), 'line_code'));
     }
 
     public function test_push_uploads_stored_bills_as_the_pos_package_in_small_chunks(): void
@@ -206,6 +208,14 @@ class PosSyncTest extends TestCase
         $bill = collect($documents)->firstWhere('invoice_no', 'INV-000053');
         $this->assertSame('', $bill['transaction']['customer_code']); // "" survives storage and upload
         $this->assertNull($bill['transaction']['customer_name']);
+    }
+
+    public function test_payment_line_code_is_the_method_type_set_up_in_quinos(): void
+    {
+        $builder = new PosTransactions(['VISA' => 'OTHER', 'BNI VISA' => 'CREDIT CARD', 'COMPLIMENT' => 'ENTERTAINMENT']);
+
+        $this->assertSame(['OTHER', 'CREDIT CARD', 'ENTERTAINMENT', 'CASH'],
+            array_map([$builder, 'lineCodeFor'], ['visa', 'BNI VISA', 'COMPLIMENT', 'CASH'])); // CASH is not in the list: guessed
     }
 
     public function test_payment_line_codes(): void

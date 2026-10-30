@@ -49,5 +49,7 @@ payment detail, void item, void transaction, FOC detail) and joins them on invoi
   with `void_transaction` "1" and no lines; FOC bills (compliment, wastage, staff meals) with `void_transaction` "2" and
   their lines, as in the old API.
 - The name typed on a bill goes to `name`; `customer_name` is only set for a customer from the customer list.
+- A payment line's `line_code` is the payment method's type from Quinos (Payment Methods: CASH, CREDIT CARD, OTHER, ...),
+  read once per sync; a method missing from that list falls back to a guess from its name.
 - Modifier and set-menu parent links are not stored by Quinos, so `parent_*` fields are always null.
 - Bills go up 25 per chunk (`RUNNER_POS_CHUNK_SIZE`).

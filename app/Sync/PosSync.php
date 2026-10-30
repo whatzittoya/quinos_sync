@@ -25,6 +25,9 @@ class PosSync
         'focLines' => '/reports/pos/focDetailReport',
     ];
 
+    /** @var array<string, string>|null payment method name => type, read once per sync */
+    private ?array $paymentTypes = null;
+
     public function __construct(private readonly QuinosClient $quinos, private readonly Client $client) {}
 
     /**
@@ -40,6 +43,21 @@ class PosSync
         }
 
         return $counts;
+    }
+
+    /** The type of each payment method (Quinos > Payment Methods), which the old API sends as the payment line_code. */
+    private function paymentTypes(): array
+    {
+        if ($this->paymentTypes === null) {
+            $this->paymentTypes = [];
+            foreach ($this->quinos->rows('/paymentMethods') as $method) {
+                if (filled($method['name'] ?? null) && filled($method['type'] ?? null)) {
+                    $this->paymentTypes[strtoupper(trim($method['name']))] = (string) $method['type'];
+                }
+            }
+        }
+
+        return $this->paymentTypes;
     }
 
     private function day(string $date): int
@@ -60,7 +78,7 @@ class PosSync
             $reports[$key] = $rows;
         }
 
-        $builder = new PosTransactions;
+        $builder = new PosTransactions($this->paymentTypes());
         $documents = $builder->build($date, ...$reports);
 
         foreach ($builder->warnings as $warning) {
