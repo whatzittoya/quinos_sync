@@ -15,6 +15,22 @@ const busy = ref(false);
 const error = ref('');
 const copied = ref('');
 
+// One line to paste into an AI agent (Claude Code, Claude Desktop, Cursor, ...): it installs the MCP server with this
+// client's key and tells the agent what the server holds, so it can use it right away.
+const agentPrompt = computed(() => {
+    if (!mcpUrl.value || !token.value) return null;
+    const name = 'quinos-' + (props.client.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'client');
+    const base = mcpUrl.value.slice(0, mcpUrl.value.lastIndexOf('/'));
+    return `Install the Quinos MCP server for ${props.client.name} and remember how to use it. `
+        + `API key: ${token.value}. In Claude Code run: claude mcp add --transport http ${name} ${mcpUrl.value} `
+        + `- in other agents add a remote MCP server (Streamable HTTP) at ${mcpUrl.value}, or at ${base} with the header "Authorization: Bearer ${token.value}". `
+        + `It holds the POS sales and purchasing of ${props.client.name} (amounts in IDR, dates in the client's timezone). `
+        + `Sales tools: list_stores (store codes and which days have data - start here), sales_summary (by day, weekday, hour, shift, sales type, payment, store), item_sales, list_transactions, get_transaction, void_report; voided bills, FOC bills (compliments, wastage, staff meals) and voided lines are not sales. `
+        + `Purchasing tools: purchase_summary (spend by supplier, month, week, category or item; basis received or ordered; reports which days are synced), list_purchase_orders, get_purchase_order (order to receipts to invoices), item_purchase_prices (price history per supplier), payables (unpaid supplier invoices). `
+        + `Sync tools: when the days you need are missing, call sync_days (package pos for sales, purchase for purchasing, at most 31 days per call), wait about a minute, check sync_status, then query again. `
+        + `Treat the API key like a password. After installing, call list_stores to confirm it works, and save these notes as a skill or memory so you know this server next time.`;
+});
+
 // The link with yesterday's date filled in, to try it in a browser.
 const example = computed(() => {
     if (!url.value) return null;
@@ -101,7 +117,17 @@ function copy(what, text) {
                         <button type="button" class="btn-ghost w-20 shrink-0" @click="copy('mcp', mcpUrl)">{{ copied === 'mcp' ? 'Copied' : 'Copy' }}</button>
                     </div>
                     <p class="mt-1 text-xs text-slate-500">
-                        Add it as a custom connector (remote MCP server, Streamable HTTP) in Claude or another AI assistant. Read-only: sales, items, bills, voids and purchasing (orders, receipts, supplier prices, unpaid invoices) of this client.
+                        Add it as a custom connector (remote MCP server, Streamable HTTP) in Claude or another AI assistant. It reads sales, items, bills, voids and purchasing (orders, receipts, supplier prices, unpaid invoices) of this client, and can pull missing days from Quinos.
+                    </p>
+                </div>
+                <div v-if="agentPrompt">
+                    <label class="label" for="agent-prompt">Prompt for an AI agent</label>
+                    <div class="flex gap-2">
+                        <textarea id="agent-prompt" :value="agentPrompt" readonly rows="3" class="field font-mono text-xs" @focus="$event.target.select()" />
+                        <button type="button" class="btn-ghost w-20 shrink-0 self-start" @click="copy('prompt', agentPrompt)">{{ copied === 'prompt' ? 'Copied' : 'Copy' }}</button>
+                    </div>
+                    <p class="mt-1 text-xs text-slate-500">
+                        Paste it into Claude Code, Claude Desktop or another agent: it installs the MCP server with this key and explains what it can do. It contains the key, so share it only with people who may see this client's data.
                     </p>
                 </div>
             </template>
