@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue';
 import { api, ApiError } from '../api';
+import ApiAccessModal from '../components/ApiAccessModal.vue';
 
 // Clients are stored on the hosted app; this page creates and edits them there and refreshes the local copy.
 const clients = ref([]);
@@ -9,8 +10,7 @@ const error = ref('');
 const editing = ref(null); // null = closed, 0 = new, otherwise the client id
 const saving = ref(false);
 const formError = ref('');
-const apiKey = ref(null); // { client, token, url }
-const showKey = (c) => { apiKey.value = { client: c.name, token: c.mobile_api_token, url: c.mobile_api_url }; };
+const apiAccess = ref(null); // client whose API access modal is open
 
 const TIMEZONES = [
     { value: 'Asia/Jakarta', label: 'WIB (Jakarta, UTC+7)' },
@@ -51,38 +51,13 @@ async function save() {
         const isNew = editing.value === 0;
         editing.value = null;
         await load();
-        if (isNew && confirm(`${data.name} was created. Generate its mobile API key now?`)) await generateKey(data);
+        if (isNew) apiAccess.value = data; // straight on to giving the new client API access
     } catch (e) {
         formError.value = message(e);
     } finally {
         saving.value = false;
     }
 }
-
-async function generateKey(client) {
-    if (client.has_mobile_api_token && !confirm(`Replace the API key of ${client.name}? The app stops working with the old key.`)) return;
-    error.value = '';
-    try {
-        const result = await api(`/hosted-clients/${client.id}/mobile-api-key`, { method: 'POST' });
-        apiKey.value = { client: client.name, token: result.token, url: result.url };
-        await load();
-    } catch (e) {
-        error.value = message(e);
-    }
-}
-
-async function removeKey(client) {
-    if (!confirm(`Remove the API key of ${client.name}? The app stops working until a new key is set.`)) return;
-    error.value = '';
-    try {
-        await api(`/hosted-clients/${client.id}/mobile-api-key`, { method: 'DELETE' });
-        await load();
-    } catch (e) {
-        error.value = message(e);
-    }
-}
-
-const copy = (text) => navigator.clipboard?.writeText(text);
 
 onMounted(load);
 </script>
@@ -102,29 +77,13 @@ onMounted(load);
 
         <p v-if="error" role="alert" class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
 
-        <div v-if="apiKey" class="card space-y-3 p-4">
-            <p class="text-sm">Mobile API key for <b>{{ apiKey.client }}</b>.</p>
-            <div class="flex gap-2">
-                <input :value="apiKey.token" readonly class="field font-mono" aria-label="API key">
-                <button class="btn-ghost shrink-0" @click="copy(apiKey.token)">Copy</button>
-            </div>
-            <div>
-                <label class="label">App URL (replace {date} with YYYY-MM-DD)</label>
-                <div class="flex gap-2">
-                    <input :value="apiKey.url" readonly class="field font-mono text-xs" aria-label="App URL">
-                    <button class="btn-ghost shrink-0" @click="copy(apiKey.url)">Copy</button>
-                </div>
-            </div>
-            <button class="btn-ghost" @click="apiKey = null">Done</button>
-        </div>
-
         <div class="card overflow-x-auto">
             <table class="w-full text-left text-sm">
                 <thead class="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
                     <tr>
                         <th class="px-4 py-3">Name</th>
                         <th class="px-4 py-3">Quinos login</th>
-                        <th class="px-4 py-3">Mobile API key</th>
+                        <th class="px-4 py-3">Mobile API</th>
                         <th class="px-4 py-3" />
                     </tr>
                 </thead>
@@ -139,22 +98,21 @@ onMounted(load);
                             <span v-if="c.quinos_email && !c.has_quinos_password" class="ml-1 text-amber-600">(no password)</span>
                         </td>
                         <td class="whitespace-nowrap px-4 py-3">
-                            <template v-if="c.mobile_api_token">
-                                <code class="text-xs text-slate-600">{{ c.mobile_api_token.slice(0, 8) }}…</code>
-                                <button class="btn-ghost ml-1" @click="showKey(c)">Show</button>
-                            </template>
-                            <span v-else-if="c.has_mobile_api_token" class="text-amber-700" title="Set before keys could be shown again. Regenerate to see it.">Set (hidden)</span>
-                            <span v-else class="text-slate-400">Not set</span>
-                            <button class="btn-ghost ml-1" @click="generateKey(c)">{{ c.has_mobile_api_token ? 'Regenerate' : 'Generate API key' }}</button>
-                            <button v-if="c.has_mobile_api_token" class="btn-ghost" @click="removeKey(c)">Remove</button>
+                            <span :class="c.has_mobile_api_token ? 'text-green-700' : 'text-slate-400'">{{ c.has_mobile_api_token ? 'Enabled' : 'Not set' }}</span>
                         </td>
                         <td class="px-4 py-3 text-right">
-                            <button class="btn-ghost" @click="open(c)">Edit</button>
+                            <button class="btn-ghost" @click="apiAccess = c">API access</button>
+                            <button class="btn-ghost ml-2" @click="open(c)">Edit</button>
                         </td>
                     </tr>
                 </tbody>
             </table>
         </div>
+
+        <ApiAccessModal
+            v-if="apiAccess" :client="apiAccess" :path="`/hosted-clients/${apiAccess.id}/mobile-api-key`"
+            @close="apiAccess = null" @changed="load"
+        />
 
         <div v-if="editing !== null" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
             <form class="card w-full max-w-lg space-y-4 p-6" @submit.prevent="save">
