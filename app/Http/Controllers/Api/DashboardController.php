@@ -10,7 +10,7 @@ use Carbon\CarbonImmutable;
 /** How current each client's data is: days behind and last sync, per report. */
 class DashboardController extends Controller
 {
-    private const REPORTS = ['purchase' => 'Purchase', 'sales' => 'Sales'];
+    private const REPORTS = ['purchase' => 'Purchase', 'sales' => 'Sales', 'pos' => 'Mobile API'];
 
     public function __invoke(): array
     {

@@ -15,7 +15,7 @@ class ImportBatch
         'items' => \App\Models\Item::class, 'sales_types' => \App\Models\SalesType::class,
         'contacts' => \App\Models\Contact::class, 'purchase_orders' => \App\Models\PurchaseOrder::class,
         'goods_receipts' => \App\Models\GoodsReceipt::class, 'purchase_invoices' => \App\Models\PurchaseInvoice::class,
-        'sales_transactions' => \App\Models\SalesTransaction::class,
+        'sales_transactions' => \App\Models\SalesTransaction::class, 'pos_transactions' => \App\Models\PosTransaction::class,
     ];
     public function apply(RunnerImport $import): array
     {

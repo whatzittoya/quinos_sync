@@ -98,6 +98,7 @@ class SyncRunner
         return match ($package) {
             'purchase' => new PurchaseSync($quinos, $client),
             'sales' => new SalesSync($quinos, $client),
+            'pos' => new PosSync($quinos, $client),
             default => throw new \InvalidArgumentException("Unknown sync package {$package}"),
         };
     }

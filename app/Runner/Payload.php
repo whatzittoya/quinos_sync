@@ -8,9 +8,19 @@ final class Payload
     public const MASTER = ['departments', 'categories', 'items', 'sales_types', 'contacts'];
     public const PURCHASE = ['purchase_orders', 'goods_receipts', 'purchase_invoices'];
     public const SALES = ['sales_transactions'];
+    public const POS = ['pos_transactions'];
+    // Mobile API (old quinoscloud getTransactionByDate format): every value is a string or null, in this key order.
+    public const POS_TRANSACTION = ['id', 'company_id', 'store_code', 'brand', 'transaction_id', 'date', 'sales_type', 'table_name', 'pax',
+        'customer_code', 'customer_name', 'delivery_address', 'pickup_time', 'driver_code', 'open_staff_code', 'open_time', 'cashier_code',
+        'close_time', 'void_transaction', 'void_reason', 'no_sales', 'subtotal', 'discount', 'service_charge', 'tax1', 'tax2', 'rounding',
+        'extra_charge', 'total', 'shift', 'shift_name', 'submit_time', 'name', 'notes', 'submit_pos', 'pending', 'additional_charge'];
+    public const POS_LINE = ['id', 'transaction_id', 'line_code', 'parent_code', 'modifier', 'item_code', 'department_code', 'category_code',
+        'discount_code', 'payment_code', 'description', 'quantity', 'unit_price', 'unit_cost', 'discount', 'service_charge', 'tax1', 'tax2',
+        'amount', 'remark', 'staff_code', 'order_time', 'void_line', 'void_reason', 'parent_item_code', 'parent_description', 'parent_category',
+        'parent_department', 'parent_quantity', 'parent_unit_price', 'parent_discount', 'void_payment', 'combo'];
     public static function tables(string $package): array
     {
-        return match ($package) { 'master' => self::MASTER, 'purchase' => self::PURCHASE, 'sales' => self::SALES };
+        return match ($package) { 'master' => self::MASTER, 'purchase' => self::PURCHASE, 'sales' => self::SALES, 'pos' => self::POS };
     }
     public static function fields(string $table): array
     {
@@ -44,6 +54,13 @@ final class Payload
                 'sales_type' => 'nullable|string|max:50', 'pax' => 'required|integer|between:0,4294967295',
                 'subtotal' => $num, 'discount' => $num, 'serv_chg' => $num, 'tax' => $num, 'total' => $num,
                 'open_time' => 'nullable|date_format:Y-m-d H:i:s', 'close_time' => 'nullable|date_format:Y-m-d H:i:s'],
+            'pos_transactions' => $id + ['date' => 'required|date_format:Y-m-d', 'invoice_no' => $str, 'store_code' => $str,
+                'close_time' => 'nullable|date_format:Y-m-d H:i:s',
+                'transaction' => 'required|array:'.implode(',', self::POS_TRANSACTION).'|required_array_keys:'.implode(',', self::POS_TRANSACTION),
+                'transaction.*' => 'nullable|string|max:1000',
+                'transaction_lines' => 'present|array|max:2000',
+                'transaction_lines.*' => 'array:'.implode(',', self::POS_LINE).'|required_array_keys:'.implode(',', self::POS_LINE),
+                'transaction_lines.*.*' => 'nullable|string|max:1000'],
             'sales_lines' => ['type' => 'required|in:ITEM,DISCOUNT', 'code' => $str, 'name' => 'present|string|max:255', 'quantity' => $num, 'unit_price' => $num, 'amount' => $num],
         };
     }

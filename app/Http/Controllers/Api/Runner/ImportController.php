@@ -28,7 +28,7 @@ class ImportController extends Controller
     public function begin(Request $request)
     {
         $data = $request->validate([
-            'id' => 'required|uuid', 'client_id' => 'required|integer', 'package' => 'required|in:master,purchase,sales',
+            'id' => 'required|uuid', 'client_id' => 'required|integer', 'package' => 'required|in:master,purchase,sales,pos',
             'dates' => 'present|array|max:62', 'dates.*' => 'required|date_format:Y-m-d|distinct',
             'source_synced_at' => 'required|date|before_or_equal:now', 'purchase_cutoff' => 'nullable|date',
             'chunk_count' => 'required|integer|between:1,10000',
@@ -58,6 +58,9 @@ class ImportController extends Controller
         abort_if($sequence < 0 || $sequence >= $import->chunk_count, 422, 'Invalid chunk sequence.');
         abort_if(strlen($request->getContent()) > 2 * 1024 * 1024, 413, 'Chunk is too large.');
         $data = $request->validate(['tables' => 'required|array']);
+        // Mobile API values must arrive exactly as sent: "" and null mean different things to the app, and the
+        // global middleware would turn "" into null and trim strings. Other packages keep the middleware's cleaning.
+        if ($import->package === 'pos') $data['tables'] = json_decode($request->getContent(), true, 512, JSON_THROW_ON_ERROR)['tables'];
         abort_if(array_diff(array_keys($data['tables']), Payload::tables($import->package)) !== [], 422, 'Invalid tables for this package.');
         foreach ($data['tables'] as $table => $rows) {
             abort_unless(is_array($rows) && array_is_list($rows) && count($rows) <= 100, 422, 'Each chunk accepts at most 100 documents per table.');

@@ -2,8 +2,9 @@
 
 return [
 
-    // Data packages synced for every day.
-    'packages' => ['purchase', 'sales'],
+    // Data packages synced for every day. `pos` builds the mobile app's transactions; only this local
+    // runner syncs it, the hosted app just stores and serves what is uploaded.
+    'packages' => ['purchase', 'sales', 'pos'],
 
     // Quinos lists come newest-created first. A day sync stops reading a list
     // once it reaches documents created more than this many days before the

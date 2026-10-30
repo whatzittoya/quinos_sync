@@ -38,3 +38,14 @@ For XAMPP, use `xampp-start.cmd` after starting Apache and MySQL in the XAMPP Co
 Each reports run covers yesterday and today, plus any of the previous days (7 by default, `RUNNER_CATCHUP_DAYS` in `.env`, 0 turns it off) that are not fully synced, so a PC that was off catches up.
 
 Scheduling is separate and only runs for the clients checked under **Scheduler**: the **Master data** task runs `local:sync --scheduled --master-only`, while the **Reports** task runs `local:sync --scheduled --reports-only`. Configure their times independently from the dashboard.
+
+## Mobile API data (`pos` package)
+
+Each reports run also builds the mobile app's transactions for the same days and uploads them as the `pos` package; the
+hosted app only stores and serves them. Per day it reads five POS reports (transaction summary, transaction item detail,
+payment detail, void item, void transaction) and joins them on invoice number (`app/Sync/PosTransactions.php`):
+
+- Payments come with their real amounts; voided lines carry quantity -1 and the void reason; voided bills are included
+  with `void_transaction` "1" and no lines. FOC bills are not included.
+- Modifier and set-menu parent links are not stored by Quinos, so `parent_*` fields are always null.
+- Bills go up 25 per chunk (`RUNNER_POS_CHUNK_SIZE`).
