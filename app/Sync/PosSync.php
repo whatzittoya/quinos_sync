@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Builds the mobile app's transactions (see PosTransactions) from five POS reports, one day per request
+ * Builds the mobile app's transactions (see PosTransactions) from six POS reports, one day per request
  * like SalesSync. A synced day is replaced as a whole, which also removes bills deleted in Quinos.
  */
 class PosSync
@@ -22,6 +22,7 @@ class PosSync
         'payments' => '/reports/pos/paymentDetailReport',
         'voidItems' => '/reports/pos/voidItemReport',
         'voidTransactions' => '/reports/pos/voidTransactionReport',
+        'focLines' => '/reports/pos/focDetailReport',
     ];
 
     public function __construct(private readonly QuinosClient $quinos, private readonly Client $client) {}

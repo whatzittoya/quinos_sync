@@ -42,10 +42,12 @@ Scheduling is separate and only runs for the clients checked under **Scheduler**
 ## Mobile API data (`pos` package)
 
 Each reports run also builds the mobile app's transactions for the same days and uploads them as the `pos` package; the
-hosted app only stores and serves them. Per day it reads five POS reports (transaction summary, transaction item detail,
-payment detail, void item, void transaction) and joins them on invoice number (`app/Sync/PosTransactions.php`):
+hosted app only stores and serves them. Per day it reads six POS reports (transaction summary, transaction item detail,
+payment detail, void item, void transaction, FOC detail) and joins them on invoice number (`app/Sync/PosTransactions.php`):
 
 - Payments come with their real amounts; voided lines carry quantity -1 and the void reason; voided bills are included
-  with `void_transaction` "1" and no lines. FOC bills are not included.
+  with `void_transaction` "1" and no lines; FOC bills (compliment, wastage, staff meals) with `void_transaction` "2" and
+  their lines, as in the old API.
+- The name typed on a bill goes to `name`; `customer_name` is only set for a customer from the customer list.
 - Modifier and set-menu parent links are not stored by Quinos, so `parent_*` fields are always null.
 - Bills go up 25 per chunk (`RUNNER_POS_CHUNK_SIZE`).

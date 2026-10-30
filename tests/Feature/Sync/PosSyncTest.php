@@ -60,6 +60,14 @@ class PosSyncTest extends TestCase
                 $header(['id' => 10750000, 'invoice_no' => 'INV-001209', 'sales_type' => 'TAKE AWAY', 'close_time' => '2026-10-01 18:20:00',
                     'void_transaction' => 1, 'void_reason' => 'CHANGE PAYMENT W GOJEK', 'subtotal' => 214000, 'total' => 253055]),
             ]],
+            // A free staff meal (FOC): raw lines, each joined with the bill header.
+            'focLines' => ['result' => array_map(fn ($line) => $line + ['invoice_no' => 'INV-000099',
+                'transaction' => $header(['id' => 10749000, 'invoice_no' => 'INV-000099', 'close_time' => '2026-10-01 15:00:00', 'foc' => 1,
+                    'subtotal' => 40000, 'total' => 40000, 'customer_name' => 'STAFF MEAL'])], [
+                ['id' => 10749000, 'type' => 'ITEM', 'code' => 'B01', 'name' => 'LATTE', 'category' => 'COFFEE', 'department' => 'BEVERAGE', 'quantity' => 1,
+                    'unit_price' => 40000, 'unit_cost' => 12000, 'staff_name' => 'ANA', 'order_time' => '2026-10-01 14:50:00', 'void_line' => 0],
+                ['id' => 10749000, 'type' => 'PAYMENT', 'code' => 'COMPLIMENT', 'name' => 'COMPLIMENT', 'amount' => 40000],
+            ])],
         ];
     }
 
@@ -67,7 +75,7 @@ class PosSyncTest extends TestCase
     {
         $r = $this->reports();
         $documents = (new PosTransactions)->build('2026-10-01', $r['summary']['result'], $r['items']['result'],
-            $r['payments']['rows'], $r['voidItems']['result'], $r['voidTransactions']['result']);
+            $r['payments']['rows'], $r['voidItems']['result'], $r['voidTransactions']['result'], $r['focLines']['result']);
 
         return collect($documents)->keyBy('invoice_no')->all();
     }
@@ -118,6 +126,30 @@ class PosSyncTest extends TestCase
         $this->assertSame([], $bill['transaction_lines']);
     }
 
+    public function test_foc_bills_are_void_transaction_2_with_their_lines(): void
+    {
+        $bill = $this->build()['INV-000099'];
+
+        $this->assertSame(['2', null, '40000', 'STAFF MEAL', null], [$bill['transaction']['void_transaction'], $bill['transaction']['void_reason'],
+            $bill['transaction']['total'], $bill['transaction']['name'], $bill['transaction']['customer_name']]);
+        $this->assertSame(['0', 'OTHER'], array_column($bill['transaction_lines'], 'line_code'));
+        $this->assertSame('12000', $bill['transaction_lines'][0]['unit_cost']);
+        $this->assertSame('COMPLIMENT', $bill['transaction_lines'][1]['payment_code']);
+    }
+
+    public function test_typed_bill_name_goes_to_name_and_brand_falls_back_to_the_outlet(): void
+    {
+        $r = $this->reports();
+        $r['summary']['result'][1] = ['customer_name' => 'JESS, ELLIE', 'brand' => ''] + $r['summary']['result'][1];
+        $r['summary']['result'][0] = ['customer_code' => 'C-7', 'customer_name' => 'Pak Budi'] + $r['summary']['result'][0];
+        $docs = collect((new PosTransactions)->build('2026-10-01', $r['summary']['result'], [], [], [], []))->keyBy('invoice_no');
+
+        $typed = $docs['INV-000053']['transaction'];
+        $this->assertSame(['JESS, ELLIE', null, 'ZALI.ULUWATU'], [$typed['name'], $typed['customer_name'], $typed['brand']]);
+        $member = $docs['INV-000093']['transaction'];
+        $this->assertSame(['Pak Budi', 'Pak Budi', 'C-7'], [$member['name'], $member['customer_name'], $member['customer_code']]);
+    }
+
     public function test_every_document_passes_the_hosted_import_validation(): void
     {
         foreach ($this->build() as $document) {
@@ -125,21 +157,21 @@ class PosSyncTest extends TestCase
         }
     }
 
-    public function test_sync_reads_the_five_reports_and_replaces_the_day(): void
+    public function test_sync_reads_the_six_reports_and_replaces_the_day(): void
     {
         $quinos = FakeQuinos::install();
         $client = Client::factory()->create(['quinos_email' => $quinos->email, 'quinos_password' => $quinos->password]);
         foreach ($this->reports() as $key => $props) {
             $path = ['summary' => 'transactionSummaryReport', 'items' => 'transactionItemDetailReport', 'payments' => 'paymentDetailReport',
-                'voidItems' => 'voidItemReport', 'voidTransactions' => 'voidTransactionReport'][$key];
+                'voidItems' => 'voidItemReport', 'voidTransactions' => 'voidTransactionReport', 'focLines' => 'focDetailReport'][$key];
             $quinos->details['/reports/pos/'.$path] = $props;
         }
         PosTransaction::create(['client_id' => $client->id, 'quinos_id' => 1, 'date' => '2026-10-01', 'transaction' => [], 'transaction_lines' => []]);
 
         $counts = (new PosSync(QuinosClient::for($client), $client))->sync(['2026-10-01']);
 
-        $this->assertSame(['2026-10-01' => 3], $counts);
-        $this->assertSame(['INV-000053', 'INV-001209', 'INV-000093'], PosTransaction::orderBy('close_time')->pluck('invoice_no')->all());
+        $this->assertSame(['2026-10-01' => 4], $counts);
+        $this->assertSame(['INV-000053', 'INV-000099', 'INV-001209', 'INV-000093'], PosTransaction::orderBy('close_time')->pluck('invoice_no')->all());
         $this->assertSame(['from' => '2026-10-01', 'to' => '2026-10-01T00:00:00.000Z', 'outlet_id' => null],
             $quinos->requests('POST', '/reports/pos/paymentDetailReport')[0]['body']);
         $stored = PosTransaction::where('invoice_no', 'INV-000053')->first();
@@ -161,13 +193,13 @@ class PosSyncTest extends TestCase
             return Http::response(['counts' => ['pos_transactions' => 3]]);
         });
 
-        $this->assertSame(3, app(LocalSyncService::class)->push($client, 'pos', ['2026-10-01']));
+        $this->assertSame(3, app(LocalSyncService::class)->push($client, 'pos', ['2026-10-01'])); // the fake hosted answer
 
         $this->assertSame('pos', $sent[0]['body']['package']);
-        $this->assertSame(2, $sent[0]['body']['chunk_count']);
+        $this->assertSame(2, $sent[0]['body']['chunk_count']); // 4 bills, 2 per chunk
         $chunks = array_values(array_filter($sent, fn ($r) => str_contains($r['url'], '/chunks/')));
         $documents = array_merge(...array_map(fn ($r) => $r['body']['tables']['pos_transactions'], $chunks));
-        $this->assertCount(3, $documents);
+        $this->assertCount(4, $documents);
         foreach ($documents as $document) {
             $this->assertSame($document, Payload::clean('pos_transactions', $document));
         }

@@ -13,8 +13,10 @@ use App\Runner\Payload;
  *   paymentDetailReport          one row per payment, with its amount
  *   voidItemReport               voided lines (negative quantity and a reason)
  *   voidTransactionReport        voided bills (same shape as the summary)
+ *   focDetailReport              free (FOC) bills: raw lines joined with their header
  *
- * The first three leave voided bills out. Every output value is a string or null, following the old API:
+ * The first three leave voided and FOC bills out. As in the old API, voided bills get void_transaction "1" and
+ * FOC bills (compliment, wastage, staff meals) "2"; neither is revenue. Every output value is a string or null, following the old API:
  * line transaction_id is the header id, item line_code counts from "0", item amount and modifier are null,
  * payment lines have quantity "1", the cashier and the close time.
  */
@@ -29,7 +31,7 @@ class PosTransactions
     /**
      * @return list<array{quinos_id: int, date: string, invoice_no: ?string, store_code: ?string, close_time: ?string, transaction: array, transaction_lines: list<array>}>
      */
-    public function build(string $date, array $summary, array $items, array $payments, array $voidItems, array $voidTransactions): array
+    public function build(string $date, array $summary, array $items, array $payments, array $voidItems, array $voidTransactions, array $focLines = []): array
     {
         $this->warnings = [];
         $itemsBy = $this->byInvoice($items);
@@ -56,6 +58,27 @@ class PosTransactions
         foreach ($voidTransactions as $h) {
             $invoice = $this->invoice($h);
             $documents[$invoice] ??= $this->document($date, ['void_transaction' => 1] + $h, []);
+        }
+
+        // A voided FOC bill stays voided ("1"); the rest become "2".
+        foreach ($this->byInvoice($focLines) as $invoice => $rows) {
+            if (isset($documents[$invoice])) {
+                continue;
+            }
+            $h = $rows[0]['transaction'] ?? $rows[0];
+            $items = array_filter($rows, fn ($r) => strtoupper((string) ($r['type'] ?? '')) !== 'PAYMENT');
+            $lines = array_map(fn ($r) => array_merge($this->itemLine($r), ['void_line' => $this->s($r['void_line'] ?? null) ?? '0']), array_values($items));
+            usort($lines, fn ($a, $b) => strcmp((string) $a['order_time'], (string) $b['order_time']));
+            foreach ($lines as $i => &$line) {
+                $line['line_code'] = (string) $i;
+            }
+            unset($line);
+            foreach ($rows as $r) {
+                if (strtoupper((string) ($r['type'] ?? '')) === 'PAYMENT') {
+                    $lines[] = $this->paymentLine($r, $h);
+                }
+            }
+            $documents[$invoice] = $this->document($date, $h + ['foc' => 1], $lines);
         }
 
         $documents = array_values($documents);
@@ -110,19 +133,23 @@ class PosTransactions
     private function header(array $h): array
     {
         $void = (int) ($h['void_transaction'] ?? 0) === 1;
+        $foc = ! $void && (int) ($h['foc'] ?? 0) === 1;
+        // The old API puts the name typed on the bill in `name`; Quinos reports it as customer_name, and only a
+        // bill with a customer from the customer list (customer_code set) keeps customer_name.
+        $typedName = $this->orNull($h['customer_name'] ?? null);
 
         return $this->ordered(Payload::POS_TRANSACTION, [
             'id' => $this->s($h['id'] ?? null),
             'company_id' => $this->s($h['company_id'] ?? null),
             'store_code' => $this->filled($h['outlet_name'] ?? null) ? strtoupper((string) $h['outlet_name']) : null,
-            'brand' => $this->s($h['brand'] ?? $h['outlet_name'] ?? null),
+            'brand' => $this->orNull($h['brand'] ?? null) ?? ($this->filled($h['outlet_name'] ?? null) ? strtoupper((string) $h['outlet_name']) : null),
             'transaction_id' => $this->s($h['invoice_no'] ?? null),
             'date' => $this->s($h['date'] ?? null),
             'sales_type' => $this->s($h['sales_type'] ?? null),
             'table_name' => $this->s($h['table_no'] ?? null),
             'pax' => $this->s($h['pax'] ?? null) ?? '0',
             'customer_code' => $this->s($h['customer_code'] ?? null) ?? '',
-            'customer_name' => $this->orNull($h['customer_name'] ?? null),
+            'customer_name' => $this->filled($h['customer_code'] ?? null) ? $typedName : null,
             'delivery_address' => $this->orNull($h['delivery_address'] ?? null),
             'pickup_time' => $this->orNull($h['pickup_time'] ?? null),
             'driver_code' => $this->orNull($h['delivery_to'] ?? null),
@@ -130,7 +157,7 @@ class PosTransactions
             'open_time' => $this->s($h['open_time'] ?? null),
             'cashier_code' => $this->s($h['close_by'] ?? null),
             'close_time' => $this->s($h['close_time'] ?? null),
-            'void_transaction' => $void ? '1' : '0',
+            'void_transaction' => $void ? '1' : ($foc ? '2' : '0'),
             'void_reason' => $void ? ($this->s($h['void_reason'] ?? null) ?? '') : null,
             'no_sales' => '0',
             'subtotal' => $this->s($h['subtotal'] ?? null) ?? '0',
@@ -144,7 +171,7 @@ class PosTransactions
             'shift' => $this->s($h['shift'] ?? null),
             'shift_name' => $this->s($h['shift_name'] ?? null),
             'submit_time' => $this->s($h['submit_time'] ?? null),
-            'name' => $this->s($h['name'] ?? null) ?? '',
+            'name' => $this->orNull($h['name'] ?? null) ?? $typedName ?? '',
             'notes' => $this->s($h['notes'] ?? null) ?? '',
             'submit_pos' => $this->s($h['submit_pos'] ?? null),
             'pending' => '0',
