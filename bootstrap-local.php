@@ -21,4 +21,14 @@ if (empty($values['APP_KEY'])) {
 $app = require __DIR__.'/bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 Illuminate\Support\Facades\Artisan::call('config:clear');
+// After a git pull, apply new migrations here: the Setup page only migrates when it is submitted again.
+// Before setup is done there is nothing to update; Setup migrates the fresh database itself.
+try {
+    if (Illuminate\Support\Facades\Schema::hasTable('local_settings')) {
+        if (Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]) !== 0) throw new RuntimeException(trim(Illuminate\Support\Facades\Artisan::output()));
+        echo "Database up to date.\n";
+    }
+} catch (Throwable $e) {
+    echo "WARNING: could not update the database (".mb_substr($e->getMessage(), 0, 200)."). Check that MySQL is running, then start again.\n";
+}
 echo "Local configuration ready.\n";

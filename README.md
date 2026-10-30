@@ -13,7 +13,7 @@ The first-run page asks for:
 
 Click **Finish setup**. The app connects to MySQL, creates the database only if missing and permitted, runs pending migrations without dropping existing data, and encrypts the API token locally. The dashboard opens automatically. A failed setup can be retried.
 
-On subsequent starts, `start.cmd` opens the dashboard directly. Keep the command window open while using the local UI. Scheduled syncs run independently using `php artisan local:sync --scheduled`.
+On subsequent starts, `start.cmd` opens the dashboard directly. Both launchers also apply new database migrations (for example after a `git pull`), so Setup does not need to be run again; if MySQL is not running yet they print a warning and carry on. Keep the command window open while using the local UI. Scheduled syncs run independently using `php artisan local:sync --scheduled`.
 
 The sidebar has three pages:
 - **Dashboard**: one card per client with Purchase and Sales days behind, last sync time, and master data last sync.
