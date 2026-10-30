@@ -79,7 +79,7 @@ class ClientsController extends Controller
         return $this->hostedCall(function () use ($api, $id) {
             $result = $api->generateMobileToken($id);
 
-            return ['token' => $result['token'], 'url' => $result['url'], 'data' => $this->public($result['tenant'])];
+            return ['token' => $result['token'], 'url' => $result['url'], 'mcp_url' => $result['mcp_url'] ?? null, 'data' => $this->public($result['tenant'])];
         });
     }
 
@@ -106,6 +106,7 @@ class ClientsController extends Controller
             'has_quinos_password' => filled($tenant['quinos_password'] ?? null), 'timezone' => $tenant['timezone'],
             'has_mobile_api_token' => (bool) ($tenant['has_mobile_api_token'] ?? false),
             'mobile_api_token' => $tenant['mobile_api_token'] ?? null, 'mobile_api_url' => $tenant['mobile_api_url'] ?? null,
+            'mcp_url' => $tenant['mcp_url'] ?? null,
         ];
     }
 

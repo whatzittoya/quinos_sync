@@ -9,6 +9,7 @@ const emit = defineEmits(['close', 'changed']);
 
 const token = ref(props.client.mobile_api_token ?? null);
 const url = ref(props.client.mobile_api_url ?? null);
+const mcpUrl = ref(props.client.mcp_url ?? null);
 const hidden = ref(!token.value && props.client.has_mobile_api_token); // set before keys could be shown again
 const busy = ref(false);
 const error = ref('');
@@ -28,6 +29,7 @@ async function generate() {
         const result = await api(props.path, { method: 'POST' });
         token.value = result.token;
         url.value = result.url;
+        mcpUrl.value = result.mcp_url ?? null;
         hidden.value = false;
     });
 }
@@ -38,6 +40,7 @@ async function remove() {
         await api(props.path, { method: 'DELETE' });
         token.value = null;
         url.value = null;
+        mcpUrl.value = null;
         hidden.value = false;
     });
 }
@@ -89,6 +92,16 @@ function copy(what, text) {
                     <p class="mt-1 text-xs text-slate-500">
                         Try it: <a :href="example" target="_blank" rel="noopener" class="break-all text-blue-700 underline">yesterday's transactions</a>.
                         {STORE} in the link means no bills were uploaded yet; it becomes the outlet code (for example ZALI.ULUWATU) after the first sync.
+                    </p>
+                </div>
+                <div v-if="mcpUrl">
+                    <label class="label" for="mcp-url">MCP server for AI assistants</label>
+                    <div class="flex gap-2">
+                        <input id="mcp-url" :value="mcpUrl" readonly class="field font-mono text-xs" @focus="$event.target.select()">
+                        <button type="button" class="btn-ghost w-20 shrink-0" @click="copy('mcp', mcpUrl)">{{ copied === 'mcp' ? 'Copied' : 'Copy' }}</button>
+                    </div>
+                    <p class="mt-1 text-xs text-slate-500">
+                        Add it as a custom connector (remote MCP server, Streamable HTTP) in Claude or another AI assistant. Read-only: sales, items, bills and voids of this client.
                     </p>
                 </div>
             </template>
